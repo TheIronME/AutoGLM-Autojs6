@@ -1,0 +1,16 @@
+{
+    "model": {
+        "baseUrl": "https://api.minimaxi.com/v1",
+        "modelName": "MiniMax-M2.7-highspeed",
+        "apiKey": "sk-cp-",
+        "lang": "cn"
+    },
+    "agent": {
+        "maxSteps": 100,
+        "verbose": true,
+        "screenMode": "xml"
+    },
+    "storage": {
+        "useConfigFile": true
+    }
+}

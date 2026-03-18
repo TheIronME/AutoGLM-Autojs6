@@ -37,6 +37,18 @@ ui.layout(
                     </vertical>
                 </card>
 
+                {/* 存储配置 */}
+                <card w="*" h="auto" margin="8 16" cardCornerRadius="8dp" cardElevation="4dp">
+                    <vertical padding="16">
+                        <text text="存储配置" textSize="18sp" textStyle="bold" marginBottom="8" />
+
+                        <text text="优先使用:" textSize="14sp" marginTop="8" />
+                        <spinner id="storage_spinner" entries="内部存储(app)|配置文件(config.json)" />
+
+                        <text text="配置文件路径: config.json" textSize="12sp" marginTop="8" textColor="#888888" />
+                    </vertical>
+                </card>
+
                 {/* Agent 配置 */}
                 <card w="*" h="auto" margin="8 16" cardCornerRadius="8dp" cardElevation="4dp">
                     <vertical padding="16">
@@ -47,6 +59,9 @@ ui.layout(
 
                         <text text="详细日志:" textSize="14sp" marginTop="8" />
                         <Switch id="verbose_switch" checked="true" />
+
+                        <text text="屏幕模式:" textSize="14sp" marginTop="8" />
+                        <spinner id="screen_mode_spinner" entries="截图模式(screenshot)|XML模式(xml)" />
                     </vertical>
                 </card>
 
@@ -63,8 +78,12 @@ ui.layout(
 
 // 加载配置
 function loadConfig() {
+    var storageConfig = storage.getStorageConfig();
     var modelConfig = storage.getModelConfig();
     var agentConfig = storage.getAgentConfig();
+
+    // 设置存储方式
+    ui.storage_spinner.setSelection(storageConfig.useConfigFile ? 1 : 0);
 
     ui.base_url.setText(modelConfig.baseUrl);
     ui.model_name.setText(modelConfig.modelName);
@@ -73,10 +92,22 @@ function loadConfig() {
 
     ui.max_steps.setText(agentConfig.maxSteps.toString());
     ui.verbose_switch.setChecked(agentConfig.verbose);
+
+    // 设置屏幕模式
+    var screenMode = agentConfig.screenMode || "screenshot";
+    if (screenMode === "screenshot") {
+        ui.screen_mode_spinner.setSelection(0);
+    } else {
+        ui.screen_mode_spinner.setSelection(1);
+    }
 }
 
 // 保存配置
 function saveConfig() {
+    var storageConfig = {
+        useConfigFile: ui.storage_spinner.getSelectedItemPosition() === 1
+    };
+
     var modelConfig = {
         baseUrl: ui.base_url.text(),
         modelName: ui.model_name.text(),
@@ -86,14 +117,16 @@ function saveConfig() {
 
     var agentConfig = {
         maxSteps: parseInt(ui.max_steps.text()) || 100,
-        verbose: ui.verbose_switch.isChecked()
+        verbose: ui.verbose_switch.isChecked(),
+        screenMode: ui.screen_mode_spinner.getSelectedItemPosition() === 0 ? "screenshot" : "xml"
     };
 
+    storage.setStorageConfig(storageConfig);
     storage.setModelConfig(modelConfig);
     storage.setAgentConfig(agentConfig);
 
     toast("设置已保存");
-    logger.info("配置已保存");
+    logger.info("配置已保存, 存储方式: " + (storageConfig.useConfigFile ? "config.json" : "内部存储"));
 }
 
 // 初始化

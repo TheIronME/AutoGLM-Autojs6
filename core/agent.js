@@ -8,6 +8,7 @@ var MessageBuilder = require('./message_builder');
 var ActionHandler = require('./action_handler');
 var screenCapture = require('../accessibility/screen_capture');
 var appDetector = require('../accessibility/app_detector');
+var xmlParser = require('../accessibility/xml_parser');
 var SYSTEM_PROMPTS = require('../config/system_prompt');
 var logger = require('../utils/logger');
 
@@ -20,6 +21,10 @@ function PhoneAgent(modelConfig, agentConfig) {
     this.verbose = agentConfig.verbose !== false;
     this.lang = agentConfig.lang || 'cn';
     this.systemPrompt = SYSTEM_PROMPTS[this.lang];
+    
+    // 屏幕解析模式: "screenshot"(截图) 或 "xml"(XML解析)
+    // 默认为截图模式
+    this.screenMode = agentConfig.screenMode || 'screenshot';
 
     // 动作处理器
     this.actionHandler = new ActionHandler();
@@ -93,40 +98,69 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
         this.stepCount++;
         logger.info("执行第 " + this.stepCount + " 步");
 
-        // 1. 获取屏幕截图
-        var screenshot = screenCapture.captureScreen();
+        // 1. 根据screenMode获取屏幕信息
+        var screenshot = null;
+        var uiDescription = null;
 
-        if (!screenshot) {
-            throw new Error("截图失败");
+        // 获取屏幕尺寸 (无论哪种模式都需要)
+        var screenWidth = device.width;
+        var screenHeight = device.height;
+
+        if (this.screenMode === 'xml') {
+            // XML解析模式
+            uiDescription = xmlParser.getUiDescription();
+            logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 100) + "..." : "获取失败"));
+        } else {
+            // 截图模式(默认)
+            screenshot = screenCapture.captureScreen();
+            if (!screenshot) {
+                throw new Error("截图失败");
+            }
+            // 使用截图的尺寸
+            screenWidth = screenshot.width;
+            screenHeight = screenshot.height;
+            logger.debug("使用截图模式, 屏幕尺寸: " + screenWidth + "x" + screenHeight);
         }
 
         // 2. 检测当前应用
         var currentApp = appDetector.getCurrentApp();
         logger.debug("当前应用: " + currentApp);
 
-        // 3. 构建消息
+        // 4. 构建消息 (根据screenMode选择截图或XML)
         if (isFirst) {
             // 添加系统消息
             this.context.push(MessageBuilder.createSystemMessage(this.systemPrompt));
 
-            // 添加用户消息 (带任务和截图)
+            // 添加用户消息 (根据screenMode选择)
             var screenInfo = MessageBuilder.buildScreenInfo(currentApp);
             var textContent = userPrompt + "\n\n** Screen Info **\n\n" + screenInfo;
+            
+            if (this.screenMode === 'xml') {
+                textContent += "\n\n** UI Elements (XML) **\n\n" + uiDescription;
+            }
 
+            // 根据screenMode决定是否添加图片
+            var imageData = (this.screenMode === 'xml') ? null : screenshot.base64Data;
             this.context.push(
-                MessageBuilder.createUserMessage(textContent, screenshot.base64Data)
+                MessageBuilder.createUserMessage(textContent, imageData)
             );
         } else {
-            // 添加屏幕信息
+            // 添加屏幕信息 (根据screenMode选择)
             var screenInfo = MessageBuilder.buildScreenInfo(currentApp);
             var textContent = "** Screen Info **\n\n" + screenInfo;
+            
+            if (this.screenMode === 'xml') {
+                textContent += "\n\n** UI Elements (XML) **\n\n" + uiDescription;
+            }
 
+            // 根据screenMode决定是否添加图片
+            var imageData = (this.screenMode === 'xml') ? null : screenshot.base64Data;
             this.context.push(
-                MessageBuilder.createUserMessage(textContent, screenshot.base64Data)
+                MessageBuilder.createUserMessage(textContent, imageData)
             );
         }
 
-        // 4. 请求模型
+        // 5. 请求模型
         logger.info("💭 正在思考...");
         var response = this.modelClient.request(this.context);
 
@@ -135,29 +169,29 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
             logger.info("动作: " + response.action);
         }
 
-        // 5. 解析动作
+        // 6. 解析动作
         var action = ActionHandler.parseAction(response.action);
 
-        // 6. 移除图片节省空间
+        // 7. 移除图片节省空间
         this.context[this.context.length - 1] = MessageBuilder.removeImagesFromMessage(
             this.context[this.context.length - 1]
         );
 
-        // 7. 执行动作
+        // 8. 执行动作
         var actionResult = this.actionHandler.execute(
             action,
-            screenshot.width,
-            screenshot.height
+            screenWidth,
+            screenHeight
         );
 
-        // 8. 添加助手响应到上下文
+        // 9. 添加助手响应到上下文
         this.context.push(
             MessageBuilder.createAssistantMessage(
                 "<think>" + response.thinking + "</think><answer>" + response.action + "</answer>"
             )
         );
 
-        // 9. 检查是否完成
+        // 10. 检查是否完成
         var finished = actionResult.shouldFinish;
 
         if (finished && this.verbose) {
