@@ -15,17 +15,17 @@ var FUNCTION_TOOLS = [
         type: "function",
         function: {
             name: "do_launch",
-            description: "启动指定的应用程序。通过包名或应用名称启动应用。",
+            description: "启动指定的应用程序。【重要】这是启动应用的唯一方式，必须使用此工具来启动或切换应用。优先使用 package_name 参数（包名）以确保准确性。",
             parameters: {
                 type: "object",
                 properties: {
                     package_name: {
                         type: "string",
-                        description: "应用的包名，如 com.tencent.mm"
+                        description: "应用的包名（优先使用），如 com.tencent.mm（微信）、com.ss.android.ugc.aweme（抖音）、com.jingdong.app.mall（京东）"
                     },
                     app_name: {
                         type: "string",
-                        description: "应用的名称，如 微信"
+                        description: "应用的名称（当不知道包名时使用），如 微信、抖音、京东"
                     }
                 },
                 required: []

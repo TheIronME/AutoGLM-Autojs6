@@ -32,7 +32,7 @@ var SYSTEM_PROMPTS = {
 
 | 工具 | 用途 |
 |------|------|
-| do_launch | 启动目标应用 |
+| do_launch | **启动目标应用（唯一方式）** |
 | do_tap | 点击坐标 [x,y] |
 | do_double_tap | 双击坐标 |
 | do_long_press | 长按坐标 |
@@ -43,7 +43,11 @@ var SYSTEM_PROMPTS = {
 | do_wait | 等待指定时长 |
 | finish | 结束任务并提交完成信息 |
 
-**注意**：详细的参数定义通过 tools 参数（JSON Schema）提供。请参考工具定义了解参数类型和要求。
+**重要规则**：
+- **启动应用必须使用 do_launch 工具**，这是启动应用的唯一方式
+- **优先使用包名（package_name）参数**启动应用，以确保准确性
+- 不要尝试通过点击屏幕图标来启动应用，必须使用 do_launch
+- 详细的参数定义通过 tools 参数（JSON Schema）提供
 
 ---
 
@@ -136,8 +140,8 @@ var SYSTEM_PROMPTS = {
 
 ## 何时使用各工具
 
-- **do_launch**：启动应用或切换到其他应用时使用
-- **do_tap**：点击按钮、选择项目、打开应用、与UI元素交互时使用
+- **do_launch**：**启动应用的唯一方式**。当需要启动或切换应用时必须使用此工具。优先使用 package_name 参数（包名）以确保准确性，如不知道包名可使用 app_name 参数
+- **do_tap**：点击按钮、选择项目、与UI元素交互时使用
 - **do_double_tap**：缩放、选择文本或打开需要双击的项目时使用
 - **do_long_press**：触发上下文菜单、选择文本或激活长按交互时使用
 - **do_type**：输入文本时使用（确保输入框已获得焦点）
@@ -146,6 +150,17 @@ var SYSTEM_PROMPTS = {
 - **do_home**：返回主屏幕时使用
 - **do_wait**：等待页面加载时使用
 - **finish**：任务完成或无法继续时使用
+
+## 启动应用规则
+
+**严格规则**：启动目标应用必须使用 do_launch 工具，禁止通过点击屏幕图标来启动应用。
+
+正确示例：
+- `do_launch(package_name="com.tencent.mm")` - 通过包名启动微信
+- `do_launch(app_name="微信")` - 通过应用名启动微信（当不知道包名时）
+
+错误示例：
+- ❌ 使用 do_tap 点击桌面图标启动应用
 
 ## 工具调用流程
 
@@ -181,7 +196,7 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 | Tool | Purpose |
 |------|---------|
-| do_launch | Start the target app |
+| do_launch | **Start the target app (ONLY way)** |
 | do_tap | Click at coordinates [x,y] |
 | do_double_tap | Double tap at coordinates |
 | do_long_press | Long press at coordinates |
@@ -192,7 +207,11 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_wait | Wait for specified duration |
 | finish | End the task with completion message |
 
-**Note**: Detailed parameter definitions are provided via the tools parameter (JSON Schema). Refer to the tool definitions for parameter types and requirements.
+**Important Rules**:
+- **Starting an app MUST use do_launch tool**, this is the only way to launch apps
+- **Prefer package_name parameter** to ensure accuracy when launching apps
+- Do NOT attempt to launch apps by tapping screen icons, must use do_launch
+- Detailed parameter definitions are provided via the tools parameter (JSON Schema)
 
 ---
 
@@ -285,8 +304,8 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 ## When to Use Each Tool
 
-- **do_launch**: Use when starting an app or switching to a different app
-- **do_tap**: Use for clicking buttons, selecting items, opening apps, interacting with UI elements
+- **do_launch**: **The ONLY way to start an app**. Must use this tool when starting or switching apps. Prefer package_name parameter for accuracy, or use app_name if package name is unknown
+- **do_tap**: Use for clicking buttons, selecting items, interacting with UI elements
 - **do_double_tap**: Use for zooming, selecting text, or opening items that require double tap
 - **do_long_press**: Use for triggering context menus, selecting text, or activating long press interactions
 - **do_type**: Use for text input (ensure input box is focused first)
@@ -295,6 +314,17 @@ All phone operations are performed by calling the corresponding tool functions. 
 - **do_home**: Use for returning to home screen
 - **do_wait**: Use for waiting page to load
 - **finish**: Use when task is complete or cannot proceed
+
+## App Launch Rules
+
+**Strict Rule**: Starting a target app MUST use do_launch tool. Do NOT launch apps by tapping screen icons.
+
+Correct examples:
+- `do_launch(package_name="com.tencent.mm")` - Launch WeChat by package name
+- `do_launch(app_name="WeChat")` - Launch WeChat by app name (when package name is unknown)
+
+Incorrect example:
+- ❌ Using do_tap to click desktop icon to launch app
 
 ## Tool Call Flow
 
@@ -334,7 +364,7 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 | 工具 | 用途 |
 |------|------|
-| do_launch | 启动目标应用 |
+| do_launch | **启动目标应用（唯一方式）** |
 | do_tap | 点击坐标 [x,y] |
 | do_double_tap | 双击坐标 |
 | do_long_press | 长按坐标 |
@@ -345,7 +375,11 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_wait | 等待指定时长 |
 | finish | 结束任务并提交完成信息 |
 
-**注意**：详细的参数定义通过 tools 参数（JSON Schema）提供。请参考工具定义了解参数类型和要求。
+**重要规则**：
+- **启动应用必须使用 do_launch 工具**，这是启动应用的唯一方式
+- **优先使用包名（package_name）参数**启动应用，以确保准确性
+- 不要尝试通过点击屏幕图标来启动应用，必须使用 do_launch
+- 详细的参数定义通过 tools 参数（JSON Schema）提供
 
 ---
 
@@ -437,8 +471,8 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 ## 何时使用各工具
 
-- **do_launch**：启动应用或切换到其他应用时使用
-- **do_tap**：点击按钮、选择项目、打开应用、与UI元素交互时使用
+- **do_launch**：**启动应用的唯一方式**。当需要启动或切换应用时必须使用此工具。优先使用 package_name 参数（包名）以确保准确性，如不知道包名可使用 app_name 参数
+- **do_tap**：点击按钮、选择项目、与UI元素交互时使用
 - **do_double_tap**：缩放、选择文本或打开需要双击的项目时使用
 - **do_long_press**：触发上下文菜单、选择文本或激活长按交互时使用
 - **do_type**：输入文本时使用（确保输入框已获得焦点）
@@ -447,6 +481,17 @@ All phone operations are performed by calling the corresponding tool functions. 
 - **do_home**：返回主屏幕时使用
 - **do_wait**：等待页面加载时使用
 - **finish**：任务完成或无法继续时使用
+
+## 启动应用规则
+
+**严格规则**：启动目标应用必须使用 do_launch 工具，禁止通过点击屏幕图标来启动应用。
+
+正确示例：
+- 通过包名启动：do_launch(package_name="com.tencent.mm") 启动微信
+- 通过应用名启动：do_launch(app_name="微信") 启动微信（当不知道包名时）
+
+错误示例：
+- 错误：使用 do_tap 点击桌面图标启动应用
 
 ## 工具调用流程
 
@@ -482,7 +527,7 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 | Tool | Purpose |
 |------|---------|
-| do_launch | Start the target app |
+| do_launch | **Start the target app (ONLY way)** |
 | do_tap | Click at coordinates [x,y] |
 | do_double_tap | Double tap at coordinates |
 | do_long_press | Long press at coordinates |
@@ -493,7 +538,11 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_wait | Wait for specified duration |
 | finish | End the task with completion message |
 
-**Note**: Detailed parameter definitions are provided via the tools parameter (JSON Schema). Refer to the tool definitions for parameter types and requirements.
+**Important Rules**:
+- **Starting an app MUST use do_launch tool**, this is the only way to launch apps
+- **Prefer package_name parameter** to ensure accuracy when launching apps
+- Do NOT attempt to launch apps by tapping screen icons, must use do_launch
+- Detailed parameter definitions are provided via the tools parameter (JSON Schema)
 
 ---
 
@@ -585,8 +634,8 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 ## When to Use Each Tool
 
-- **do_launch**: Use when starting an app or switching to a different app
-- **do_tap**: Use for clicking buttons, selecting items, opening apps, interacting with UI elements
+- **do_launch**: **The ONLY way to start an app**. Must use this tool when starting or switching apps. Prefer package_name parameter for accuracy, or use app_name if package name is unknown
+- **do_tap**: Use for clicking buttons, selecting items, interacting with UI elements
 - **do_double_tap**: Use for zooming, selecting text, or opening items that require double tap
 - **do_long_press**: Use for triggering context menus, selecting text, or activating long press interactions
 - **do_type**: Use for text input (ensure input box is focused first)
@@ -595,6 +644,17 @@ All phone operations are performed by calling the corresponding tool functions. 
 - **do_home**: Use for returning to home screen
 - **do_wait**: Use for waiting page to load
 - **finish**: Use when task is complete or cannot proceed
+
+## App Launch Rules
+
+**Strict Rule**: Starting a target app MUST use do_launch tool. Do NOT launch apps by tapping screen icons.
+
+Correct examples:
+- Launch by package name: do_launch(package_name="com.tencent.mm") to launch WeChat
+- Launch by app name: do_launch(app_name="WeChat") when package name is unknown
+
+Incorrect example:
+- Wrong: Using do_tap to click desktop icon to launch app
 
 ## Tool Call Flow
 
