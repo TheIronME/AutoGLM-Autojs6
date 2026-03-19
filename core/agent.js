@@ -16,6 +16,10 @@ function PhoneAgent(modelConfig, agentConfig) {
     // 模型配置
     this.modelClient = new ModelClient(modelConfig);
 
+    // Function Call 配置
+    // 默认启用 function call 模式，可通过 modelConfig.useFunctionCall = false 禁用
+    this.useFunctionCall = modelConfig.useFunctionCall !== false;
+
     // Agent 配置
     this.maxSteps = agentConfig.maxSteps || 100;
     this.verbose = agentConfig.verbose !== false;
@@ -162,51 +166,101 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
 
         // 5. 请求模型
         logger.info("💭 正在思考...");
-        var response = this.modelClient.request(this.context);
-
-        if (this.verbose) {
-            logger.info("思考: " + response.thinking);
-            logger.info("动作: " + response.action);
-        }
-
-        // 6. 解析动作
-        var action = ActionHandler.parseAction(response.action);
+        var response = this.modelClient.request(this.context, this.useFunctionCall);
 
         // 7. 移除图片节省空间
         this.context[this.context.length - 1] = MessageBuilder.removeImagesFromMessage(
             this.context[this.context.length - 1]
         );
 
-        // 8. 执行动作
-        var actionResult = this.actionHandler.execute(
-            action,
-            screenWidth,
-            screenHeight
-        );
+        // 8. 处理响应 - 区分 Function Call 模式和文本模式
+        var action;
+        var actionResult;
+        var finished = false;
+        var thinking = response.thinking || "";
 
-        // 9. 添加助手响应到上下文
-        this.context.push(
-            MessageBuilder.createAssistantMessage(
-                "<think>" + response.thinking + "</think><answer>" + response.action + "</answer>"
-            )
-        );
+        if (this.useFunctionCall && response.toolCalls && response.toolCalls.length > 0) {
+            // Function Call 模式
+            logger.info("模型返回 " + response.toolCalls.length + " 个工具调用");
+
+            // 解析工具调用
+            var parsedCalls = this.modelClient.parseToolCall(response.toolCalls);
+
+            // 构建助手消息（包含 tool_calls）
+            this.context.push(this.buildToolCallsAssistantMessage(response.toolCalls));
+
+            // 处理每个工具调用
+            for (var i = 0; i < parsedCalls.length; i++) {
+                var toolCall = parsedCalls[i];
+                logger.info("执行工具: " + toolCall.name + ", 参数: " + JSON.stringify(toolCall.arguments));
+
+                // 转换为 action 对象
+                action = this.modelClient.convertToolCallToAction(toolCall);
+                if (!action) {
+                    logger.error("工具转换失败: " + toolCall.name);
+                    continue;
+                }
+
+                // 执行动作
+                actionResult = this.actionHandler.execute(
+                    action,
+                    screenWidth,
+                    screenHeight
+                );
+
+                // 构建工具结果消息
+                var toolResult = {
+                    success: actionResult.success,
+                    message: actionResult.message
+                };
+                this.context.push(this.buildToolResultMessage(toolCall.id, toolResult));
+
+                // 检查是否完成
+                if (actionResult.shouldFinish) {
+                    finished = true;
+                    break;
+                }
+            }
+
+        } else {
+            // 文本模式（传统模式或模型未返回 tool_calls）
+            logger.info("模型响应: " + response.action);
+
+            // 6. 解析动作
+            action = ActionHandler.parseAction(response.action);
+
+            // 8. 执行动作
+            actionResult = this.actionHandler.execute(
+                action,
+                screenWidth,
+                screenHeight
+            );
+
+            // 9. 添加助手响应到上下文
+            this.context.push(
+                MessageBuilder.createAssistantMessage(
+                    "<tool_call>" + response.thinking + "经济技术开发区\n<answer>" + response.action + "</answer>"
+                )
+            );
+
+            // 检查是否完成
+            finished = actionResult.shouldFinish;
+        }
 
         // 10. 检查是否完成
-        var finished = actionResult.shouldFinish;
-
         if (finished && this.verbose) {
-            logger.info("✅ 任务完成: " + actionResult.message);
+            logger.info("✅ 任务完成: " + (actionResult ? actionResult.message : ""));
         } else {
             sleep(1200);
             logger.info("休息一会: 1200ms");
         }
 
         return {
-            success: actionResult.success,
+            success: actionResult ? actionResult.success : false,
             finished: finished,
             action: action,
-            thinking: response.thinking,
-            message: actionResult.message,
+            thinking: thinking,
+            message: actionResult ? actionResult.message : "",
             stepCount: this.stepCount
         };
 
@@ -221,6 +275,35 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
             stepCount: this.stepCount
         };
     }
+};
+
+/**
+ * 构建包含 tool_calls 的助手消息
+ * 符合 OpenAI API 消息格式
+ * @param {Array} toolCalls - 原始 tool_calls 数组
+ * @returns {Object} 助手消息对象
+ */
+PhoneAgent.prototype.buildToolCallsAssistantMessage = function (toolCalls) {
+    return {
+        role: "assistant",
+        content: null,
+        tool_calls: toolCalls
+    };
+};
+
+/**
+ * 构建工具调用结果消息
+ * 符合 OpenAI API 消息格式
+ * @param {string} toolCallId - 工具调用 ID
+ * @param {Object} result - 执行结果 {success, message}
+ * @returns {Object} 工具结果消息对象
+ */
+PhoneAgent.prototype.buildToolResultMessage = function (toolCallId, result) {
+    return {
+        role: "tool",
+        tool_call_id: toolCallId,
+        content: JSON.stringify(result)
+    };
 };
 
 /**
