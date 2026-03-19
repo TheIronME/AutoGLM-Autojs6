@@ -67,6 +67,10 @@ XmlParser.prototype.buildTree = function (node, depth) {
         }
     }
     
+    // 计算中心坐标
+    var centerX = Math.round((boundsInScreen.left + boundsInScreen.right) / 2);
+    var centerY = Math.round((boundsInScreen.top + boundsInScreen.bottom) / 2);
+    
     // 提取节点属性
     var nodeData = {
         // 基本标识
@@ -85,6 +89,12 @@ XmlParser.prototype.buildTree = function (node, depth) {
             top: boundsInScreen.top,
             right: boundsInScreen.right,
             bottom: boundsInScreen.bottom
+        },
+        
+        // 中心坐标
+        center: {
+            x: centerX,
+            y: centerY
         },
         
         // 布尔状态
@@ -216,6 +226,9 @@ XmlParser.prototype.extractSimplifiedElements = function (node, elements, indexC
     // 只有有内容的元素才添加
     if (displayText || elementType !== "View") {
         var boundsInScreen = node.boundsInScreen();
+        // 计算中心坐标
+        var centerX = Math.round((boundsInScreen.left + boundsInScreen.right) / 2);
+        var centerY = Math.round((boundsInScreen.top + boundsInScreen.bottom) / 2);
         elements.push({
             index: indexCounter++,
             type: elementType,
@@ -229,6 +242,10 @@ XmlParser.prototype.extractSimplifiedElements = function (node, elements, indexC
                 top: boundsInScreen.top,
                 right: boundsInScreen.right,
                 bottom: boundsInScreen.bottom
+            },
+            center: {
+                x: centerX,
+                y: centerY
             }
         });
     }
@@ -261,8 +278,10 @@ XmlParser.prototype.getUiDescription = function () {
     
     for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
-        var boundsStr = el.bounds ? 
+        var boundsStr = el.bounds ?
             `[${el.bounds.left}, ${el.bounds.top}, ${el.bounds.right}, ${el.bounds.bottom}]` : "[]";
+        var centerStr = el.center ?
+            `(${el.center.x}, ${el.center.y})` : "()";
         
         description += `[${el.index}] ${el.type}: "${el.text}"`;
         
@@ -271,6 +290,7 @@ XmlParser.prototype.getUiDescription = function () {
         }
         
         description += ` at ${boundsStr}`;
+        description += ` center: ${centerStr}`;
         
         if (el.clickable) {
             description += " [可点击]";
