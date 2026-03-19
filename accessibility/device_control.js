@@ -97,7 +97,7 @@ DeviceControl.swipe = function (x1, y1, x2, y2, durationMs, delay) {
         // 根据距离计算时长
         var distSq = Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2);
         durationMs = Math.floor(distSq / 1000);
-        durationMs = Math.max(1000, Math.min(durationMs, 2000)); // 限制在 1000-2000ms
+        durationMs = Math.max(300, Math.min(durationMs, 800)); // 限制在 300-800ms
     }
 
     try {

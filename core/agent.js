@@ -55,7 +55,7 @@ PhoneAgent.prototype.captureScreenState = function() {
     if (this.screenMode === 'xml') {
         // XML解析模式
         uiDescription = xmlParser.getUiDescription();
-        logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 100) + "..." : "获取失败"));
+        logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 1000) + "..." : "获取失败"));
     } else {
         // 截图模式(默认)
         screenshot = screenCapture.captureScreen();

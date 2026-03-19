@@ -137,6 +137,10 @@ var FUNCTION_TOOLS = [
                         type: "array",
                         items: { type: "integer" },
                         description: "结束坐标 [x, y]，范围 0-999"
+                    },
+                    duration_ms: {
+                        type: "integer",
+                        description: "滑动时长（毫秒），范围 300-800ms。不提供时根据滑动距离自动计算。"
                     }
                 },
                 required: ["start_coordinate", "end_coordinate"]
@@ -566,6 +570,7 @@ ModelClient.prototype.convertToolCallToAction = function (toolCall) {
             // action_handler 期望 start 和 end 参数
             action.start = args.start_coordinate || [0, 0];
             action.end = args.end_coordinate || [0, 0];
+            action.duration_ms = args.duration_ms || null;
             break;
 
         case "do_back":

@@ -206,7 +206,21 @@ XmlParser.prototype.extractSimplifiedElements = function (node, elements, indexC
     } else if (className) {
         // 使用类名的最后一部分
         var classParts = className.split('.');
-        displayText = classParts[classParts.length - 1];
+        var simpleClassName = classParts[classParts.length - 1];
+        
+        // 过滤掉无意义的布局容器类名
+        var layoutClasses = ['FrameLayout', 'LinearLayout', 'RelativeLayout',
+                              'ConstraintLayout', 'CoordinatorLayout', 'DrawerLayout',
+                              'GridLayout', 'TableLayout', 'AbsoluteLayout',
+                              'ViewPager', 'ViewPager2', 'RecyclerView', 'ScrollView',
+                              'NestedScrollView', 'HorizontalScrollView', 'ListView',
+                              'GridView', 'ViewStub', 'ViewSwitcher', 'ViewFlipper',
+                              'TabHost', 'TabWidget', 'ActionMenuView', 'Toolbar',
+                              'AppBarLayout', 'BottomNavigationView', 'NavigationView',
+                              'CardView', 'SwipeRefreshLayout'];
+        if (layoutClasses.indexOf(simpleClassName) === -1) {
+            displayText = simpleClassName;
+        }
     }
     
     // 元素类型分类

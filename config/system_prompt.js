@@ -132,7 +132,7 @@ var SYSTEM_PROMPTS = {
 - **do_double_tap**：缩放、选择文本或打开需要双击的项目时使用
 - **do_long_press**：触发上下文菜单、选择文本或激活长按交互时使用
 - **do_type**：输入文本时使用（确保输入框已获得焦点）
-- **do_swipe**：滚动内容、导航页面、下拉通知栏时使用
+- **do_swipe**：滚动内容、导航页面、下拉通知栏时使用。可选参数 duration_ms 控制滑动时长（毫秒），范围 300-800ms，不提供时自动计算
 - **do_back**：返回或关闭对话框时使用
 - **do_home**：返回主屏幕时使用
 - **do_wait**：等待页面加载时使用
@@ -177,7 +177,7 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_double_tap | Double tap at coordinates |
 | do_long_press | Long press at coordinates |
 | do_type | Input text into focused input box |
-| do_swipe | Swipe from start to end coordinates |
+| do_swipe | Swipe from start to end coordinates. Optional duration_ms (300-800ms) controls swipe duration |
 | do_back | Press back button |
 | do_home | Press home button |
 | do_wait | Wait for specified duration |
