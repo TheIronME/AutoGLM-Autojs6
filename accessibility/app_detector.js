@@ -3,7 +3,7 @@
  * 检测当前运行的应用
  */
 
-var APP_PACKAGES = require('../config/apps');
+var AppInfo = require('../config/app_info');
 var logger = require('../utils/logger');
 
 var AppDetector = {};
@@ -24,14 +24,12 @@ AppDetector.getCurrentApp = function () {
 
         logger.debug("当前包名: " + packageName);
 
-        // 从配置中查找应用名称
-        for (var appName in APP_PACKAGES) {
-            if (APP_PACKAGES.hasOwnProperty(appName)) {
-                if (APP_PACKAGES[appName] === packageName) {
-                    logger.debug("识别应用: " + appName);
-                    return appName;
-                }
-            }
+        // 使用 AppInfo 模块获取应用名称（优先动态获取，回退到静态映射表）
+        var appName = AppInfo.getAppName(packageName);
+        
+        if (appName) {
+            logger.debug("识别应用: " + appName);
+            return appName;
         }
 
         // 未识别的应用,返回包名
@@ -71,8 +69,9 @@ AppDetector.isAppRunning = function (appName) {
             return true;
         }
 
-        // 检查是否是应用名称
-        if (APP_PACKAGES[appName] && APP_PACKAGES[appName] === currentPkg) {
+        // 使用 AppInfo 模块获取包名，检查是否是应用名称
+        var packageName = AppInfo.getPackageName(appName);
+        if (packageName && packageName === currentPkg) {
             return true;
         }
 

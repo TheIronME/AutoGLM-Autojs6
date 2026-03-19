@@ -4,7 +4,7 @@
  */
 
 var timing = require('../config/timing');
-var APP_PACKAGES = require('../config/apps');
+var AppInfo = require('../config/app_info');
 var logger = require('../utils/logger');
 
 var DeviceControl = {};
@@ -169,10 +169,12 @@ DeviceControl.launchApp = function (appName, delay) {
     }
 
     try {
-        // 检查是否是应用名称,需要转换为包名
-        var packageName = appName;
-        if (APP_PACKAGES[appName]) {
-            packageName = APP_PACKAGES[appName];
+        // 使用 AppInfo 模块获取包名（优先动态获取，回退到静态映射表）
+        var packageName = AppInfo.getPackageName(appName);
+        
+        // 如果找不到包名，使用原始输入（可能是包名格式）
+        if (!packageName) {
+            packageName = appName;
         }
 
         logger.info("启动应用: " + appName + " (" + packageName + ")");
