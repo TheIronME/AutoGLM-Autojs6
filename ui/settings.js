@@ -70,6 +70,16 @@ ui.layout(
                     </vertical>
                 </card>
 
+                {/* 日志配置 */}
+                <card w="*" h="auto" margin="8 16" cardCornerRadius="8dp" cardElevation="4dp">
+                    <vertical padding="16">
+                        <text text="日志配置" textSize="18sp" textStyle="bold" marginBottom="8" />
+
+                        <text text="日志等级:" textSize="14sp" marginTop="8" />
+                        <spinner id="log_level_spinner" entries="DEBUG(调试)|INFO(信息)|WARN(警告)|ERROR(错误)" />
+                    </vertical>
+                </card>
+
                 {/* 按钮 */}
                 <horizontal margin="16">
                     <button id="save_btn" text="保存设置" w="*" style="Widget.AppCompat.Button.Colored" />
@@ -86,6 +96,7 @@ function loadConfig() {
     var storageConfig = storage.getStorageConfig();
     var modelConfig = storage.getModelConfig();
     var agentConfig = storage.getAgentConfig();
+    var logConfig = storage.getLogConfig();
 
     // 设置存储方式
     ui.storage_spinner.setSelection(storageConfig.useConfigFile ? 1 : 0);
@@ -108,6 +119,11 @@ function loadConfig() {
 
     // 设置休息间隔
     ui.rest_interval.setText(String(agentConfig.restInterval || 1200));
+
+    // 设置日志等级
+    var logLevelMap = { "DEBUG": 0, "INFO": 1, "WARN": 2, "ERROR": 3 };
+    var logLevel = logConfig.level || "INFO";
+    ui.log_level_spinner.setSelection(logLevelMap[logLevel] !== undefined ? logLevelMap[logLevel] : 1);
 }
 
 // 保存配置
@@ -130,9 +146,18 @@ function saveConfig() {
         restInterval: parseInt(ui.rest_interval.text()) || 1200
     };
 
+    var logLevelMap = ["DEBUG", "INFO", "WARN", "ERROR"];
+    var logConfig = {
+        level: logLevelMap[ui.log_level_spinner.getSelectedItemPosition()] || "INFO"
+    };
+
     storage.setStorageConfig(storageConfig);
     storage.setModelConfig(modelConfig);
     storage.setAgentConfig(agentConfig);
+    storage.setLogConfig(logConfig);
+
+    // 更新日志等级
+    logger.setLevel(logConfig.level);
 
     toast("设置已保存");
     logger.info("配置已保存, 存储方式: " + (storageConfig.useConfigFile ? "config.json" : "内部存储"));

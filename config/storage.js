@@ -221,4 +221,42 @@ Storage.prototype.setAgentConfig = function (config) {
     this.set("rest_interval", config.restInterval);
 };
 
+/**
+ * 获取日志配置
+ */
+Storage.prototype.getLogConfig = function () {
+    // 获取存储方式
+    this.getStorageConfig();
+
+    if (this.useConfigFile && this.configData && this.configData.log) {
+        return {
+            level: this.configData.log.level || "INFO"
+        };
+    }
+
+    return {
+        level: this.get("log_level", "INFO")
+    };
+};
+
+/**
+ * 保存日志配置
+ */
+Storage.prototype.setLogConfig = function (config) {
+    if (this.useConfigFile) {
+        if (this.configData === null) {
+            this.readConfigFile();
+        }
+        if (this.configData) {
+            this.configData.log = {
+                level: config.level
+            };
+            this.writeConfigFile();
+        }
+    }
+
+    // 同时保存到内部存储
+    this.set("log_level", config.level);
+};
+
 module.exports = new Storage();

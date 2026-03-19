@@ -12,7 +12,27 @@ function Logger() {
     };
     this.currentLevel = this.logLevel.INFO;
     this.logCallback = null;
+    this.initialized = false;
 }
+
+/**
+ * 从配置初始化日志等级
+ */
+Logger.prototype.initFromConfig = function () {
+    if (this.initialized) {
+        return;
+    }
+    try {
+        var storage = require(files.cwd() + '/config/storage');
+        var logConfig = storage.getLogConfig();
+        if (logConfig && logConfig.level && this.logLevel[logConfig.level] !== undefined) {
+            this.currentLevel = this.logLevel[logConfig.level];
+        }
+    } catch (e) {
+        // 忽略错误，使用默认等级
+    }
+    this.initialized = true;
+};
 
 /**
  * 设置日志级别
@@ -50,6 +70,11 @@ Logger.prototype.format = function (level, message) {
  * @param {string} message - 消息内容
  */
 Logger.prototype.log = function (level, levelName, message) {
+    // 自动从配置初始化日志等级
+    if (!this.initialized) {
+        this.initFromConfig();
+    }
+
     if (level < this.currentLevel) {
         return;
     }
