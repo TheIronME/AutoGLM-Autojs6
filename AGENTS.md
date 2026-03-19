@@ -57,6 +57,139 @@ AutoGLM-Autojs6 是一个 AI 驱动的 Android 手机自动化助手，基于 Au
 - `screenshot` - 截图模式，发送 Base64 图片给模型
 - `xml` - XML 解析模式，发送 UI 元素树描述给模型
 
+## 屏幕模式详解
+
+AutoGLM-Autojs6 实现了两种读取屏幕内容的模式，用于 AI 模型理解当前屏幕状态。两种模式各有优劣，适用于不同场景。
+
+### 截图模式 (screenshot)
+
+#### 工作原理
+通过 [`accessibility/screen_capture.js`](accessibility/screen_capture.js) 获取屏幕截图，转换为 Base64 编码后发送给模型。
+
+#### 数据流
+```
+屏幕捕获 → images.captureScreen() → Image 对象
+         → images.toBase64() → Base64 字符串
+         → 构建多模态消息 → 发送给 AI 模型
+```
+
+#### 坐标系统
+使用相对坐标 0-999（左上角 0,0；右下角 999,999），与屏幕分辨率无关。
+
+#### 优点
+- 保留完整视觉信息（图片、图标、颜色、布局）
+- 适合需要视觉判断的场景
+- 可识别游戏界面、自定义绘制控件
+
+#### 缺点
+- Token 消耗较大（约 1000-4000 tokens）
+- 数据传输量较大（约 500KB-2MB Base64）
+- 可能泄露敏感信息（如银行账号）
+
+#### 适用场景
+- 游戏自动化（识别游戏元素、血条、道具）
+- 社交媒体应用（小红书、抖音等图片/视频内容）
+- 需要识别验证码的场景
+- 自定义绘制的 UI 控件（Canvas、游戏引擎）
+
+---
+
+### XML 解析模式 (xml)
+
+#### 工作原理
+通过 [`accessibility/xml_parser.js`](accessibility/xml_parser.js) 解析 UI 元素树，提取结构化信息后生成文本描述发送给模型。
+
+#### 数据流
+```
+无障碍服务 → auto.rootInActiveWindow → UI 节点树
+           → 递归遍历提取属性 → 过滤和分类
+           → 格式化为文本描述 → 发送给 AI 模型
+```
+
+#### 坐标系统
+使用绝对像素坐标，与屏幕分辨率直接相关。
+
+#### 优点
+- Token 消耗低（约 100-1000 tokens）
+- 数据传输量小（约 5-50KB 文本）
+- 文本信息准确（直接获取控件文本）
+- 隐私友好（不包含视觉敏感信息）
+
+#### 缺点
+- 无法获取视觉信息（图片、颜色、图标）
+- 依赖无障碍服务
+- 对自定义绘制控件支持有限
+
+#### 适用场景
+- 表单自动填写
+- 系统设置操作
+- 联系人/短信管理
+- 文件管理器操作
+- 需要精确文本匹配的任务
+
+---
+
+### 模式对比
+
+| 维度 | 截图模式 | XML 解析模式 |
+|------|----------|--------------|
+| **信息完整性** | 保留所有视觉信息 | 仅保留结构化信息 |
+| **视觉理解** | 可识别图片、图标、颜色 | 无法获取视觉信息 |
+| **文本准确性** | 依赖 OCR 或模型识别 | 直接获取准确文本 |
+| **坐标系统** | 相对坐标 0-999 | 绝对像素坐标 |
+| **Token 消耗** | 约 1000-4000 tokens | 约 100-1000 tokens |
+| **数据大小** | 约 500KB-2MB | 约 5-50KB |
+| **隐私保护** | 可能泄露敏感信息 | 仅结构化数据 |
+| **依赖条件** | 截图权限 | 无障碍服务 |
+
+---
+
+### 模式选择建议
+
+| 场景类型 | 推荐模式 | 原因 |
+|----------|----------|------|
+| 游戏自动化 | 截图 | 需要视觉识别游戏元素 |
+| 社交媒体浏览 | 截图 | 图片/视频内容需要视觉理解 |
+| 电商购物 | 截图 | 需要识别商品图片 |
+| 表单填写 | XML | 文本精确、成本低 |
+| 系统设置操作 | XML | 原生控件、结构清晰 |
+| 文档处理 | XML | 文本内容为主 |
+| 银行/支付应用 | XML | 隐私保护、避免敏感信息泄露 |
+
+---
+
+### 配置方式
+
+在 `config.json` 中配置：
+
+```json
+{
+    "agent": {
+        "screenMode": "screenshot"  // 或 "xml"
+    }
+}
+```
+
+代码中的模式选择逻辑位于 [`core/agent.js`](core/agent.js:22-24)：
+
+```javascript
+// 屏幕解析模式: "screenshot"(截图) 或 "xml"(XML解析)
+// 默认为截图模式
+this.screenMode = agentConfig.screenMode || 'screenshot';
+```
+
+---
+
+### 关键实现文件
+
+| 文件 | 职责 |
+|------|------|
+| [`accessibility/screen_capture.js`](accessibility/screen_capture.js) | 截图捕获、Base64 编码、权限管理 |
+| [`accessibility/xml_parser.js`](accessibility/xml_parser.js) | UI 树解析、元素提取、文本格式化 |
+| [`core/agent.js`](core/agent.js) | 模式选择、状态捕获调度 |
+| [`core/message_builder.js`](core/message_builder.js) | 构建多模态/纯文本消息 |
+| [`config/system_prompt.js`](config/system_prompt.js) | 不同模式的系统提示词（含坐标系统说明） |
+
 ## 配置
 
 ### 必需配置
@@ -67,17 +200,38 @@ AutoGLM-Autojs6 是一个 AI 驱动的 Android 手机自动化助手，基于 Au
 - `agent.screenMode` - 屏幕模式（`xml` 或 `screenshot`）
 
 ### 时间延迟配置 (config/timing.js)
-```javascript
-device: {
-  default_tap_delay: 0.5,      // 点击延迟（秒）
-  default_launch_delay: 2.0,   // 启动应用延迟
-  screenshot_timeout: 10        // 截图超时
-}
-agent: {
-  step_delay: 0.5,              // 步骤间延迟
-  max_wait_time: 30             // 最大等待时间
-}
-```
+
+延迟参数已参数化，可在 `config.json` 的 `timing` 节点配置，或通过设置界面调整。
+
+#### 设备操作延迟（单位：毫秒）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| tapDelay | 500 | 点击操作后等待时间 |
+| doubleTapInterval | 150 | 双击两次点击间隔 |
+| doubleTapDelay | 500 | 双击操作后等待时间 |
+| longPressDelay | 500 | 长按操作后等待时间 |
+| swipeDelay | 500 | 滑动操作后等待时间 |
+| backDelay | 500 | 返回键操作后等待时间 |
+| homeDelay | 500 | 主页键操作后等待时间 |
+| launchDelay | 2000 | 启动应用后等待时间 |
+
+#### 输入操作延迟（单位：毫秒）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| typeDelay | 300 | 文本输入后等待时间 |
+| clearDelay | 300 | 清空输入框后等待时间 |
+| pressDelay | 500 | 按压坐标后等待时间 |
+| pasteDelay | 300 | 粘贴操作后等待时间 |
+| inputClickDelay | 300 | 点击输入框后等待时间 |
+
+#### Agent 延迟（单位：毫秒）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| agentRestInterval | 1200 | Agent 每步执行后等待界面稳定的时间 |
+
+#### API
+- `getTimingConfig()` - 读取延迟配置
+- `setTimingConfig(config)` - 保存延迟配置
 
 ## 工具函数
 
