@@ -8,13 +8,28 @@
     "agent": {
         "maxSteps": 100,
         "verbose": true,
-        "screenMode": "xml",
-        "restInterval": 1200
+        "screenMode": "xml"
     },
     "storage": {
         "useConfigFile": true
     },
     "log": {
         "level": "INFO"
+    },
+    "timing": {
+        "tapDelay": 500,
+        "doubleTapInterval": 150,
+        "doubleTapDelay": 500,
+        "longPressDelay": 500,
+        "swipeDelay": 500,
+        "backDelay": 500,
+        "homeDelay": 500,
+        "launchDelay": 2000,
+        "typeDelay": 300,
+        "clearDelay": 300,
+        "pressDelay": 500,
+        "pasteDelay": 300,
+        "inputClickDelay": 300,
+        "agentRestInterval": 1200
     }
 }

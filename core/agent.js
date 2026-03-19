@@ -10,6 +10,7 @@ var screenCapture = require('../accessibility/screen_capture');
 var appDetector = require('../accessibility/app_detector');
 var xmlParser = require('../accessibility/xml_parser');
 var SYSTEM_PROMPTS = require('../config/system_prompt');
+var timing = require('../config/timing');
 var logger = require('../utils/logger');
 
 function PhoneAgent(modelConfig, agentConfig) {
@@ -22,8 +23,9 @@ function PhoneAgent(modelConfig, agentConfig) {
     // 默认为截图模式
     this.screenMode = agentConfig.screenMode || 'screenshot';
     
-    // 休息间隔（毫秒）
-    this.restInterval = agentConfig.restInterval || 1200;
+    // 休息间隔（毫秒）- 从 timing 配置读取
+    var timingConfig = timing.getTimingConfig();
+    this.restInterval = timingConfig.agentRestInterval;
 
     // 模型配置 - 传入 screenMode
     modelConfig.screenMode = this.screenMode;

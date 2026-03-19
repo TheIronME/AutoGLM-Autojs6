@@ -182,16 +182,14 @@ Storage.prototype.getAgentConfig = function () {
         return {
             maxSteps: this.configData.agent.maxSteps || 100,
             verbose: this.configData.agent.verbose !== false,
-            screenMode: this.configData.agent.screenMode || "screenshot",
-            restInterval: this.configData.agent.restInterval || 1200
+            screenMode: this.configData.agent.screenMode || "screenshot"
         };
     }
 
     return {
         maxSteps: this.get("max_steps", 100),
         verbose: this.get("verbose", true),
-        screenMode: this.get("screen_mode", "screenshot"),
-        restInterval: this.get("rest_interval", 1200)
+        screenMode: this.get("screen_mode", "screenshot")
     };
 };
 
@@ -207,8 +205,7 @@ Storage.prototype.setAgentConfig = function (config) {
             this.configData.agent = {
                 maxSteps: config.maxSteps,
                 verbose: config.verbose,
-                screenMode: config.screenMode,
-                restInterval: config.restInterval
+                screenMode: config.screenMode
             };
             this.writeConfigFile();
         }
@@ -218,7 +215,6 @@ Storage.prototype.setAgentConfig = function (config) {
     this.set("max_steps", config.maxSteps);
     this.set("verbose", config.verbose);
     this.set("screen_mode", config.screenMode);
-    this.set("rest_interval", config.restInterval);
 };
 
 /**

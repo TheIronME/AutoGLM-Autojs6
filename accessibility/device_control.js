@@ -3,7 +3,7 @@
  * 使用 AutoJS6 的无障碍服务进行设备操作
  */
 
-var TIMING_CONFIG = require('../config/timing');
+var timing = require('../config/timing');
 var APP_PACKAGES = require('../config/apps');
 var logger = require('../utils/logger');
 
@@ -13,17 +13,18 @@ var DeviceControl = {};
  * 点击指定坐标
  * @param {number} x - X 坐标
  * @param {number} y - Y 坐标
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.tap = function (x, y, delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_tap_delay;
+        delay = config.tapDelay;
     }
 
     try {
         logger.debug("点击: (" + x + ", " + y + ")");
         click(x, y);
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("点击失败: " + e);
@@ -35,19 +36,20 @@ DeviceControl.tap = function (x, y, delay) {
  * 双击指定坐标
  * @param {number} x - X 坐标
  * @param {number} y - Y 坐标
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.doubleTap = function (x, y, delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_double_tap_delay;
+        delay = config.doubleTapDelay;
     }
 
     try {
         logger.debug("双击: (" + x + ", " + y + ")");
         click(x, y);
-        sleep(TIMING_CONFIG.device.double_tap_interval * 1000);
+        sleep(config.doubleTapInterval);
         click(x, y);
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("双击失败: " + e);
@@ -60,18 +62,19 @@ DeviceControl.doubleTap = function (x, y, delay) {
  * @param {number} x - X 坐标
  * @param {number} y - Y 坐标
  * @param {number} durationMs - 长按时长(毫秒)
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.longPress = function (x, y, durationMs, delay) {
+    var config = timing.getTimingConfig();
     if (durationMs === undefined) durationMs = 3000;
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_long_press_delay;
+        delay = config.longPressDelay;
     }
 
     try {
         logger.debug("长按: (" + x + ", " + y + "), 时长: " + durationMs + "ms");
         press(x, y, durationMs);
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("长按失败: " + e);
@@ -86,11 +89,12 @@ DeviceControl.longPress = function (x, y, durationMs, delay) {
  * @param {number} x2 - 终点 X
  * @param {number} y2 - 终点 Y
  * @param {number} durationMs - 滑动时长(毫秒)
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.swipe = function (x1, y1, x2, y2, durationMs, delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_swipe_delay;
+        delay = config.swipeDelay;
     }
 
     if (durationMs === null || durationMs === undefined) {
@@ -103,7 +107,7 @@ DeviceControl.swipe = function (x1, y1, x2, y2, durationMs, delay) {
     try {
         logger.debug("滑动: (" + x1 + ", " + y1 + ") -> (" + x2 + ", " + y2 + "), 时长: " + durationMs + "ms");
         swipe(x1, y1, x2, y2, durationMs);
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("滑动失败: " + e);
@@ -113,17 +117,18 @@ DeviceControl.swipe = function (x1, y1, x2, y2, durationMs, delay) {
 
 /**
  * 按返回键
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.pressBack = function (delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_back_delay;
+        delay = config.backDelay;
     }
 
     try {
         logger.debug("按返回键");
         back();
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("返回键失败: " + e);
@@ -133,17 +138,18 @@ DeviceControl.pressBack = function (delay) {
 
 /**
  * 按主页键
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.pressHome = function (delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_home_delay;
+        delay = config.homeDelay;
     }
 
     try {
         logger.debug("按主页键");
         home();
-        sleep(delay * 1000);
+        sleep(delay);
         return true;
     } catch (e) {
         logger.error("主页键失败: " + e);
@@ -154,11 +160,12 @@ DeviceControl.pressHome = function (delay) {
 /**
  * 启动应用
  * @param {string} appName - 应用名称或包名
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  */
 DeviceControl.launchApp = function (appName, delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_launch_delay;
+        delay = config.launchDelay;
     }
 
     try {
@@ -173,7 +180,7 @@ DeviceControl.launchApp = function (appName, delay) {
         var success = app.launch(packageName);
 
         if (success) {
-            sleep(delay * 1000);
+            sleep(delay);
             return true;
         } else {
             logger.error("应用启动失败: " + appName);

@@ -3,7 +3,7 @@
  * 使用多种方式实现文本输入功能
  */
 
-var TIMING_CONFIG = require('../config/timing');
+var timing = require('../config/timing');
 var logger = require('../utils/logger');
 
 var TextInput = {};
@@ -11,12 +11,13 @@ var TextInput = {};
 /**
  * 输入文本
  * @param {string} text - 要输入的文本
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  * @returns {boolean} 是否成功
  */
 TextInput.typeText = function (text, delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_type_delay;
+        delay = config.typeDelay;
     }
 
     try {
@@ -24,19 +25,19 @@ TextInput.typeText = function (text, delay) {
 
         // 方法1: 尝试使用 setText (最快)
         if (TextInput.setTextDirect(text)) {
-            sleep(delay * 1000);
+            sleep(delay);
             return true;
         }
 
         // 方法2: 尝试使用剪贴板粘贴
         if (TextInput.setTextViaClipboard(text)) {
-            sleep(delay * 1000);
+            sleep(delay);
             return true;
         }
 
         // 方法3: 使用 input 函数 (最慢但最可靠)
         if (TextInput.setTextViaInput(text)) {
-            sleep(delay * 1000);
+            sleep(delay);
             return true;
         }
 
@@ -78,6 +79,8 @@ TextInput.setTextDirect = function (text) {
  * @returns {boolean} 是否成功
  */
 TextInput.setTextViaClipboard = function (text) {
+    var config = timing.getTimingConfig();
+    
     try {
         // 保存当前剪贴板内容
         var oldClip = getClip();
@@ -94,14 +97,14 @@ TextInput.setTextViaClipboard = function (text) {
             var y = bounds.centerY();
 
             // 长按输入框
-            press(x, y, 500);
-            sleep(500);
+            press(x, y, config.pressDelay);
+            sleep(config.pressDelay);
 
             // 尝试点击"粘贴"按钮
             var pasteBtn = textMatches(/(粘贴|Paste)/).findOne(1000);
             if (pasteBtn) {
                 pasteBtn.click();
-                sleep(300);
+                sleep(config.pasteDelay);
 
                 // 恢复剪贴板
                 if (oldClip) {
@@ -131,13 +134,15 @@ TextInput.setTextViaClipboard = function (text) {
  * @returns {boolean} 是否成功
  */
 TextInput.setTextViaInput = function (text) {
+    var config = timing.getTimingConfig();
+    
     try {
         // 先点击输入框获取焦点
         var inputNode = className("EditText").findOne(1000);
 
         if (inputNode) {
             inputNode.click();
-            sleep(300);
+            sleep(config.inputClickDelay);
 
             // 使用 input 函数输入
             input(text);
@@ -154,12 +159,13 @@ TextInput.setTextViaInput = function (text) {
 
 /**
  * 清空文本
- * @param {number} delay - 延迟时间(秒)
+ * @param {number} delay - 延迟时间(毫秒)
  * @returns {boolean} 是否成功
  */
 TextInput.clearText = function (delay) {
+    var config = timing.getTimingConfig();
     if (delay === null || delay === undefined) {
-        delay = TIMING_CONFIG.device.default_clear_delay;
+        delay = config.clearDelay;
     }
 
     try {
@@ -170,7 +176,7 @@ TextInput.clearText = function (delay) {
 
         if (inputNode) {
             inputNode.setText("");
-            sleep(delay * 1000);
+            sleep(delay);
             return true;
         }
 
