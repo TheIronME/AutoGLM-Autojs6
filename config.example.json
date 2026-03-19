@@ -8,7 +8,8 @@
     "agent": {
         "maxSteps": 100,
         "verbose": true,
-        "screenMode": "xml"
+        "screenMode": "xml",
+        "restInterval": 1200
     },
     "storage": {
         "useConfigFile": true

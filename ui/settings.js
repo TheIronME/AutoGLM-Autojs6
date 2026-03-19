@@ -62,6 +62,11 @@ ui.layout(
 
                         <text text="屏幕模式:" textSize="14sp" marginTop="8" />
                         <spinner id="screen_mode_spinner" entries="截图模式(screenshot)|XML模式(xml)" />
+
+                        <text text="休息间隔(ms)" textSize="14sp" marginTop="8" />
+                        <input id="rest_interval"
+                            inputType="number"
+                            hint="每步操作后的休息时间，默认1200ms" />
                     </vertical>
                 </card>
 
@@ -100,6 +105,9 @@ function loadConfig() {
     } else {
         ui.screen_mode_spinner.setSelection(1);
     }
+
+    // 设置休息间隔
+    ui.rest_interval.setText(String(agentConfig.restInterval || 1200));
 }
 
 // 保存配置
@@ -118,7 +126,8 @@ function saveConfig() {
     var agentConfig = {
         maxSteps: parseInt(ui.max_steps.text()) || 100,
         verbose: ui.verbose_switch.isChecked(),
-        screenMode: ui.screen_mode_spinner.getSelectedItemPosition() === 0 ? "screenshot" : "xml"
+        screenMode: ui.screen_mode_spinner.getSelectedItemPosition() === 0 ? "screenshot" : "xml",
+        restInterval: parseInt(ui.rest_interval.text()) || 1200
     };
 
     storage.setStorageConfig(storageConfig);

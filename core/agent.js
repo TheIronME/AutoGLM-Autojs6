@@ -29,6 +29,9 @@ function PhoneAgent(modelConfig, agentConfig) {
     // 屏幕解析模式: "screenshot"(截图) 或 "xml"(XML解析)
     // 默认为截图模式
     this.screenMode = agentConfig.screenMode || 'screenshot';
+    
+    // 休息间隔（毫秒）
+    this.restInterval = agentConfig.restInterval || 1200;
 
     // 动作处理器
     this.actionHandler = new ActionHandler();
@@ -251,8 +254,8 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
         if (finished && this.verbose) {
             logger.info("✅ 任务完成: " + (actionResult ? actionResult.message : ""));
         } else {
-            sleep(1200);
-            logger.info("休息一会: 1200ms");
+            sleep(this.restInterval);
+            logger.info("休息一会: " + this.restInterval + "ms");
         }
 
         return {
