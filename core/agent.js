@@ -13,18 +13,10 @@ var SYSTEM_PROMPTS = require('../config/system_prompt');
 var logger = require('../utils/logger');
 
 function PhoneAgent(modelConfig, agentConfig) {
-    // 模型配置
-    this.modelClient = new ModelClient(modelConfig);
-
-    // Function Call 配置
-    // 默认启用 function call 模式，可通过 modelConfig.useFunctionCall = false 禁用
-    this.useFunctionCall = modelConfig.useFunctionCall !== false;
-
     // Agent 配置
     this.maxSteps = agentConfig.maxSteps || 100;
     this.verbose = agentConfig.verbose !== false;
     this.lang = agentConfig.lang || 'cn';
-    this.systemPrompt = SYSTEM_PROMPTS[this.lang];
     
     // 屏幕解析模式: "screenshot"(截图) 或 "xml"(XML解析)
     // 默认为截图模式
@@ -33,8 +25,19 @@ function PhoneAgent(modelConfig, agentConfig) {
     // 休息间隔（毫秒）
     this.restInterval = agentConfig.restInterval || 1200;
 
+    // 模型配置 - 传入 screenMode
+    modelConfig.screenMode = this.screenMode;
+    this.modelClient = new ModelClient(modelConfig);
+
+    // Function Call 配置
+    // 默认启用 function call 模式，可通过 modelConfig.useFunctionCall = false 禁用
+    this.useFunctionCall = modelConfig.useFunctionCall !== false;
+    
+    // 系统提示词 - 根据屏幕模式和语言获取
+    this.systemPrompt = SYSTEM_PROMPTS.getPrompt(this.screenMode, this.lang);
+
     // 动作处理器
-    this.actionHandler = new ActionHandler();
+    this.actionHandler = new ActionHandler(this.screenMode);
 
     // 上下文和状态
     this.context = [];

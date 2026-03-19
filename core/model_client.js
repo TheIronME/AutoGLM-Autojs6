@@ -324,7 +324,72 @@ function ModelClient(config) {
     this.temperature = config.temperature || 0.0;
     this.topP = config.topP || 0.85;
     this.frequencyPenalty = config.frequencyPenalty || 0.2;
+    this.screenMode = config.screenMode || 'screenshot';
 }
+
+/**
+ * 动态生成工具定义
+ * 根据屏幕模式调整坐标描述
+ * @returns {Array} 工具定义数组
+ */
+ModelClient.prototype.buildTools = function () {
+    var self = this;
+    var isXmlMode = this.screenMode === 'xml';
+    
+    // 坐标描述根据模式不同
+    var coordDesc = isXmlMode
+        ? "点击坐标 [x, y]，使用绝对像素值，如 [540, 1170]"
+        : "点击坐标 [x, y]，范围 0-999，如 [500, 300]";
+    
+    var startCoordDesc = isXmlMode
+        ? "起始坐标 [x, y]，使用绝对像素值"
+        : "起始坐标 [x, y]，范围 0-999";
+    
+    var endCoordDesc = isXmlMode
+        ? "结束坐标 [x, y]，使用绝对像素值"
+        : "结束坐标 [x, y]，范围 0-999";
+    
+    // 返回完整的工具定义数组
+    // 复制 FUNCTION_TOOLS 并替换坐标描述
+    return FUNCTION_TOOLS.map(function(tool) {
+        // 深拷贝工具对象
+        var newTool = JSON.parse(JSON.stringify(tool));
+        
+        // 根据工具类型更新坐标描述
+        if (newTool.function.name === 'do_tap' ||
+            newTool.function.name === 'do_double_tap' ||
+            newTool.function.name === 'do_long_press') {
+            if (newTool.function.parameters.properties.coordinate) {
+                newTool.function.parameters.properties.coordinate.description = coordDesc;
+            }
+        }
+        
+        if (newTool.function.name === 'do_swipe') {
+            if (newTool.function.parameters.properties.start_coordinate) {
+                newTool.function.parameters.properties.start_coordinate.description = startCoordDesc;
+            }
+            if (newTool.function.parameters.properties.end_coordinate) {
+                newTool.function.parameters.properties.end_coordinate.description = endCoordDesc;
+            }
+        }
+        
+        if (newTool.function.name === 'do_interact') {
+            if (newTool.function.parameters.properties.coordinate) {
+                newTool.function.parameters.properties.coordinate.description = coordDesc;
+            }
+        }
+        
+        return newTool;
+    });
+};
+
+/**
+ * 设置屏幕模式
+ * @param {string} mode - 屏幕模式 ('xml' 或 'screenshot')
+ */
+ModelClient.prototype.setScreenMode = function (mode) {
+    this.screenMode = mode || 'screenshot';
+};
 
 /**
  * 发送请求到模型
@@ -355,7 +420,7 @@ ModelClient.prototype.request = function (messages, useFunctionCall) {
 
         // 如果启用 function call，添加 tools 参数
         if (useFunctionCall) {
-            requestData.tools = FUNCTION_TOOLS;
+            requestData.tools = this.buildTools();
             requestData.tool_choice = "auto";
         }
 

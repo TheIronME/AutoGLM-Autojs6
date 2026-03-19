@@ -7,8 +7,9 @@ var deviceControl = require('../accessibility/device_control');
 var textInput = require('../accessibility/text_input');
 var logger = require('../utils/logger');
 
-function ActionHandler() {
+function ActionHandler(screenMode) {
     var self = this;
+    this.screenMode = screenMode || 'screenshot';  // 默认截图模式
     this.actionHandlers = {
         // 基础操作
         'Launch': function (a, w, h) { return self.handleLaunch(a, w, h); },
@@ -88,19 +89,27 @@ ActionHandler.prototype.execute = function (action, screenWidth, screenHeight) {
 };
 
 /**
- * 转换相对坐标 (0-1000) 到绝对像素坐标
- * @param {Array} element - [x, y] 相对坐标
+ * 转换坐标到绝对像素坐标
+ * - XML 模式：使用绝对像素坐标，直接返回
+ * - 截图模式：相对坐标 (0-999) 转换为像素坐标
+ * @param {Array} element - [x, y] 坐标
  * @param {number} screenWidth - 屏幕宽度
  * @param {number} screenHeight - 屏幕高度
- * @returns {Array} [x, y] 绝对坐标
+ * @returns {Array} [x, y] 绝对像素坐标
  */
 ActionHandler.prototype.convertCoordinates = function (element, screenWidth, screenHeight) {
     var relX = element[0];
     var relY = element[1];
-
+    
+    // XML 模式：使用绝对像素坐标，直接返回
+    if (this.screenMode === 'xml') {
+        return [Math.floor(relX), Math.floor(relY)];
+    }
+    
+    // 截图模式：相对坐标 (0-999) 转换为像素
     var absX = Math.floor((relX / 1000) * screenWidth);
     var absY = Math.floor((relY / 1000) * screenHeight);
-
+    
     return [absX, absY];
 };
 
