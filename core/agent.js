@@ -43,7 +43,230 @@ function PhoneAgent(modelConfig, agentConfig) {
 }
 
 /**
- * 运行任务
+ * 捕获当前屏幕状态
+ * @returns {Object} 屏幕状态数据
+ */
+PhoneAgent.prototype.captureScreenState = function() {
+    var screenshot = null;
+    var uiDescription = null;
+    var screenWidth = device.width;
+    var screenHeight = device.height;
+    
+    if (this.screenMode === 'xml') {
+        // XML解析模式
+        uiDescription = xmlParser.getUiDescription();
+        logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 100) + "..." : "获取失败"));
+    } else {
+        // 截图模式(默认)
+        screenshot = screenCapture.captureScreen();
+        if (screenshot) {
+            screenWidth = screenshot.width;
+            screenHeight = screenshot.height;
+        }
+        logger.debug("使用截图模式, 屏幕尺寸: " + screenWidth + "x" + screenHeight);
+    }
+    
+    var currentApp = appDetector.getCurrentApp();
+    logger.debug("当前应用: " + currentApp);
+    
+    return {
+        screenshot: screenshot,
+        uiDescription: uiDescription,
+        currentApp: currentApp,
+        screenWidth: screenWidth,
+        screenHeight: screenHeight
+    };
+};
+
+/**
+ * 构建用户消息
+ * @param {string} prompt - 用户提示
+ * @param {Object} screenData - 屏幕数据
+ * @param {boolean} isFirst - 是否第一步
+ * @returns {Object} 用户消息对象
+ */
+PhoneAgent.prototype.buildUserMessage = function(prompt, screenData, isFirst) {
+    var screenInfo = MessageBuilder.buildScreenInfo(screenData.currentApp);
+    var textContent = isFirst 
+        ? prompt + "\n\n** Screen Info **\n\n" + screenInfo
+        : "** Screen Info **\n\n" + screenInfo;
+
+    if (this.screenMode === 'xml' && screenData.uiDescription) {
+        textContent += "\n\n** UI Elements (XML) **\n\n" + screenData.uiDescription;
+    }
+
+    var imageData = (this.screenMode === 'xml') ? null 
+        : (screenData.screenshot ? screenData.screenshot.base64Data : null);
+
+    return MessageBuilder.createUserMessage(textContent, imageData);
+};
+
+/**
+ * 构建增强的工具结果（包含屏幕状态）
+ * @param {string} toolCallId - 工具调用 ID
+ * @param {Object} actionResult - 动作执行结果
+ * @param {Object} screenData - 屏幕数据
+ * @returns {Object} 增强的工具结果
+ */
+PhoneAgent.prototype.buildEnhancedToolResult = function(toolCallId, actionResult, screenData) {
+    var result = {
+        success: actionResult.success,
+        message: actionResult.message,
+        currentApp: screenData.currentApp
+    };
+
+    // XML 模式：返回 UI 元素描述
+    if (this.screenMode === 'xml' && screenData.uiDescription) {
+        // 限制长度避免消息过长
+        result.uiElements = screenData.uiDescription.length > 3000 
+            ? screenData.uiDescription.substring(0, 3000) + "\n... (内容已截断)"
+            : screenData.uiDescription;
+    }
+
+    // 截图模式：提示屏幕已更新
+    if (this.screenMode === 'screenshot') {
+        result.screenUpdated = true;
+        result.screenWidth = screenData.screenWidth;
+        result.screenHeight = screenData.screenHeight;
+    }
+
+    return result;
+};
+
+/**
+ * 处理模型响应
+ * @param {Object} response - 模型响应
+ * @param {Object} screenData - 当前屏幕数据
+ * @returns {Object} 处理结果 {success, finished, thinking, message, stepCount}
+ */
+PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
+    var finished = false;
+    var thinking = response.thinking || "";
+    var lastResult = null;
+
+    if (this.useFunctionCall && response.toolCalls && response.toolCalls.length > 0) {
+        // Function Call 模式
+        logger.info("模型返回 " + response.toolCalls.length + " 个工具调用");
+
+        // 解析工具调用
+        var parsedCalls = this.modelClient.parseToolCall(response.toolCalls);
+
+        // 构建助手消息（包含 tool_calls）
+        this.context.push(this.buildToolCallsAssistantMessage(response.toolCalls));
+
+        // 处理每个工具调用
+        for (var i = 0; i < parsedCalls.length; i++) {
+            var toolCall = parsedCalls[i];
+            logger.info("执行工具: " + toolCall.name + ", 参数: " + JSON.stringify(toolCall.arguments));
+
+            // 转换为 action 对象
+            var action = this.modelClient.convertToolCallToAction(toolCall);
+            if (!action) {
+                logger.error("工具转换失败: " + toolCall.name);
+                continue;
+            }
+
+            // 执行动作
+            var actionResult = this.actionHandler.execute(
+                action,
+                screenData.screenWidth,
+                screenData.screenHeight
+            );
+
+            lastResult = actionResult;
+
+            // 如果任务未完成，等待界面稳定后获取屏幕状态
+            if (!actionResult.shouldFinish) {
+                sleep(this.restInterval);
+                logger.debug("等待界面稳定: " + this.restInterval + "ms");
+            }
+
+            // 获取执行后的屏幕状态
+            var postScreenData = this.captureScreenState();
+
+            // 构建包含屏幕状态的工具结果
+            var toolResult = this.buildEnhancedToolResult(
+                toolCall.id, 
+                actionResult, 
+                postScreenData
+            );
+            this.context.push(this.buildToolResultMessage(toolCall.id, toolResult));
+
+            // 更新屏幕数据供下一个工具使用
+            screenData = postScreenData;
+
+            // 检查是否完成
+            if (actionResult.shouldFinish) {
+                finished = true;
+                break;
+            }
+        }
+
+    } else {
+        // 文本模式（传统模式或模型未返回 tool_calls）
+        logger.info("模型响应: " + response.action);
+
+        // 解析动作
+        var action = ActionHandler.parseAction(response.action);
+
+        // 执行动作
+        var actionResult = this.actionHandler.execute(
+            action,
+            screenData.screenWidth,
+            screenData.screenHeight
+        );
+
+        lastResult = actionResult;
+
+        // 添加助手响应到上下文
+        this.context.push(
+            MessageBuilder.createAssistantMessage(
+                "<tool_call>" + response.thinking + "\n<answer>" + response.action + "</answer>"
+            )
+        );
+
+        // 如果任务未完成，获取执行后的屏幕状态并添加到上下文
+        if (!actionResult.shouldFinish) {
+            sleep(this.restInterval);
+            logger.debug("等待界面稳定: " + this.restInterval + "ms");
+            
+            var postScreenData = this.captureScreenState();
+            var screenInfo = MessageBuilder.buildScreenInfo(postScreenData.currentApp);
+            var textContent = "** Screen Info **\n\n" + screenInfo;
+            
+            if (this.screenMode === 'xml' && postScreenData.uiDescription) {
+                textContent += "\n\n** UI Elements (XML) **\n\n" + postScreenData.uiDescription;
+            }
+            
+            var imageData = (this.screenMode === 'xml') ? null 
+                : (postScreenData.screenshot ? postScreenData.screenshot.base64Data : null);
+            
+            this.context.push(MessageBuilder.createUserMessage(textContent, imageData));
+            
+            // 更新屏幕数据
+            screenData = postScreenData;
+        }
+
+        // 检查是否完成
+        finished = actionResult.shouldFinish;
+    }
+
+    // 日志输出
+    if (finished && this.verbose) {
+        logger.info("✅ 任务完成: " + (lastResult ? lastResult.message : ""));
+    }
+
+    return {
+        success: lastResult ? lastResult.success : false,
+        finished: finished,
+        thinking: thinking,
+        message: lastResult ? lastResult.message : "",
+        stepCount: this.stepCount
+    };
+};
+
+/**
+ * 运行任务 - 优化后的主循环
  * @param {string} task - 任务描述
  * @param {Function} onStep - 步骤回调 (可选)
  * @returns {string} 最终消息
@@ -56,28 +279,49 @@ PhoneAgent.prototype.run = function (task, onStep) {
 
         logger.info("开始任务: " + task);
 
-        // 第一步 (带用户任务)
-        var result = this.executeStep(task, true);
+        // 1. 初始化：添加系统消息
+        this.context.push(MessageBuilder.createSystemMessage(this.systemPrompt));
 
-        if (onStep) {
-            onStep(result);
-        }
+        // 2. 获取初始屏幕状态
+        var screenData = this.captureScreenState();
+        
+        // 3. 构建初始用户消息
+        var initialMessage = this.buildUserMessage(task, screenData, true);
+        this.context.push(initialMessage);
 
-        if (result.finished) {
-            return result.message || "任务完成";
-        }
-
-        // 继续执行直到完成或达到最大步数
+        // 4. 主循环
         while (this.stepCount < this.maxSteps && this.isRunning) {
-            result = this.executeStep(null, false);
+            this.stepCount++;
+            logger.info("执行第 " + this.stepCount + " 步");
 
+            // 4.1 请求模型
+            logger.info("💭 正在思考...");
+            var response = this.modelClient.request(this.context, this.useFunctionCall);
+
+            // 4.2 移除最后一条消息中的图片以节省空间
+            this.context[this.context.length - 1] = MessageBuilder.removeImagesFromMessage(
+                this.context[this.context.length - 1]
+            );
+
+            // 4.3 处理响应
+            var result = this.handleModelResponse(response, screenData);
+
+            // 4.4 回调通知
             if (onStep) {
                 onStep(result);
             }
 
+            // 4.5 检查是否完成
             if (result.finished) {
                 return result.message || "任务完成";
             }
+
+            // 4.6 更新屏幕状态用于下一轮
+            screenData = this.captureScreenState();
+            
+            // 4.7 构建下一轮的用户消息（包含最新屏幕状态）
+            var nextMessage = this.buildUserMessage("", screenData, false);
+            this.context.push(nextMessage);
         }
 
         if (!this.isRunning) {
@@ -95,7 +339,7 @@ PhoneAgent.prototype.run = function (task, onStep) {
 };
 
 /**
- * 执行单步
+ * 执行单步（保留用于兼容）
  * @param {string} userPrompt - 用户提示 (仅第一步)
  * @param {boolean} isFirst - 是否第一步
  * @returns {Object} {success, finished, action, thinking, message}
@@ -105,165 +349,38 @@ PhoneAgent.prototype.executeStep = function (userPrompt, isFirst) {
         this.stepCount++;
         logger.info("执行第 " + this.stepCount + " 步");
 
-        // 1. 根据screenMode获取屏幕信息
-        var screenshot = null;
-        var uiDescription = null;
+        // 1. 获取屏幕状态
+        var screenData = this.captureScreenState();
 
-        // 获取屏幕尺寸 (无论哪种模式都需要)
-        var screenWidth = device.width;
-        var screenHeight = device.height;
-
-        if (this.screenMode === 'xml') {
-            // XML解析模式
-            uiDescription = xmlParser.getUiDescription();
-            logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 100) + "..." : "获取失败"));
-        } else {
-            // 截图模式(默认)
-            screenshot = screenCapture.captureScreen();
-            if (!screenshot) {
-                throw new Error("截图失败");
-            }
-            // 使用截图的尺寸
-            screenWidth = screenshot.width;
-            screenHeight = screenshot.height;
-            logger.debug("使用截图模式, 屏幕尺寸: " + screenWidth + "x" + screenHeight);
-        }
-
-        // 2. 检测当前应用
-        var currentApp = appDetector.getCurrentApp();
-        logger.debug("当前应用: " + currentApp);
-
-        // 4. 构建消息 (根据screenMode选择截图或XML)
+        // 2. 构建消息
         if (isFirst) {
             // 添加系统消息
             this.context.push(MessageBuilder.createSystemMessage(this.systemPrompt));
-
-            // 添加用户消息 (根据screenMode选择)
-            var screenInfo = MessageBuilder.buildScreenInfo(currentApp);
-            var textContent = userPrompt + "\n\n** Screen Info **\n\n" + screenInfo;
-            
-            if (this.screenMode === 'xml') {
-                textContent += "\n\n** UI Elements (XML) **\n\n" + uiDescription;
-            }
-
-            // 根据screenMode决定是否添加图片
-            var imageData = (this.screenMode === 'xml') ? null : screenshot.base64Data;
-            this.context.push(
-                MessageBuilder.createUserMessage(textContent, imageData)
-            );
+            // 添加用户消息
+            this.context.push(this.buildUserMessage(userPrompt, screenData, true));
         } else {
-            // 添加屏幕信息 (根据screenMode选择)
-            var screenInfo = MessageBuilder.buildScreenInfo(currentApp);
-            var textContent = "** Screen Info **\n\n" + screenInfo;
-            
-            if (this.screenMode === 'xml') {
-                textContent += "\n\n** UI Elements (XML) **\n\n" + uiDescription;
-            }
-
-            // 根据screenMode决定是否添加图片
-            var imageData = (this.screenMode === 'xml') ? null : screenshot.base64Data;
-            this.context.push(
-                MessageBuilder.createUserMessage(textContent, imageData)
-            );
+            // 添加屏幕信息
+            this.context.push(this.buildUserMessage("", screenData, false));
         }
 
-        // 5. 请求模型
+        // 3. 请求模型
         logger.info("💭 正在思考...");
         var response = this.modelClient.request(this.context, this.useFunctionCall);
 
-        // 7. 移除图片节省空间
+        // 4. 移除图片节省空间
         this.context[this.context.length - 1] = MessageBuilder.removeImagesFromMessage(
             this.context[this.context.length - 1]
         );
 
-        // 8. 处理响应 - 区分 Function Call 模式和文本模式
-        var action;
-        var actionResult;
-        var finished = false;
-        var thinking = response.thinking || "";
-
-        if (this.useFunctionCall && response.toolCalls && response.toolCalls.length > 0) {
-            // Function Call 模式
-            logger.info("模型返回 " + response.toolCalls.length + " 个工具调用");
-
-            // 解析工具调用
-            var parsedCalls = this.modelClient.parseToolCall(response.toolCalls);
-
-            // 构建助手消息（包含 tool_calls）
-            this.context.push(this.buildToolCallsAssistantMessage(response.toolCalls));
-
-            // 处理每个工具调用
-            for (var i = 0; i < parsedCalls.length; i++) {
-                var toolCall = parsedCalls[i];
-                logger.info("执行工具: " + toolCall.name + ", 参数: " + JSON.stringify(toolCall.arguments));
-
-                // 转换为 action 对象
-                action = this.modelClient.convertToolCallToAction(toolCall);
-                if (!action) {
-                    logger.error("工具转换失败: " + toolCall.name);
-                    continue;
-                }
-
-                // 执行动作
-                actionResult = this.actionHandler.execute(
-                    action,
-                    screenWidth,
-                    screenHeight
-                );
-
-                // 构建工具结果消息
-                var toolResult = {
-                    success: actionResult.success,
-                    message: actionResult.message
-                };
-                this.context.push(this.buildToolResultMessage(toolCall.id, toolResult));
-
-                // 检查是否完成
-                if (actionResult.shouldFinish) {
-                    finished = true;
-                    break;
-                }
-            }
-
-        } else {
-            // 文本模式（传统模式或模型未返回 tool_calls）
-            logger.info("模型响应: " + response.action);
-
-            // 6. 解析动作
-            action = ActionHandler.parseAction(response.action);
-
-            // 8. 执行动作
-            actionResult = this.actionHandler.execute(
-                action,
-                screenWidth,
-                screenHeight
-            );
-
-            // 9. 添加助手响应到上下文
-            this.context.push(
-                MessageBuilder.createAssistantMessage(
-                    "<tool_call>" + response.thinking + "经济技术开发区\n<answer>" + response.action + "</answer>"
-                )
-            );
-
-            // 检查是否完成
-            finished = actionResult.shouldFinish;
-        }
-
-        // 10. 检查是否完成
-        if (finished && this.verbose) {
-            logger.info("✅ 任务完成: " + (actionResult ? actionResult.message : ""));
-        } else {
-            sleep(this.restInterval);
-            logger.info("休息一会: " + this.restInterval + "ms");
-        }
+        // 5. 处理响应
+        var result = this.handleModelResponse(response, screenData);
 
         return {
-            success: actionResult ? actionResult.success : false,
-            finished: finished,
-            action: action,
-            thinking: thinking,
-            message: actionResult ? actionResult.message : "",
+            success: result.success,
+            finished: result.finished,
+            action: null,
+            thinking: result.thinking,
+            message: result.message,
             stepCount: this.stepCount
         };
 
@@ -298,7 +415,7 @@ PhoneAgent.prototype.buildToolCallsAssistantMessage = function (toolCalls) {
  * 构建工具调用结果消息
  * 符合 OpenAI API 消息格式
  * @param {string} toolCallId - 工具调用 ID
- * @param {Object} result - 执行结果 {success, message}
+ * @param {Object} result - 执行结果
  * @returns {Object} 工具结果消息对象
  */
 PhoneAgent.prototype.buildToolResultMessage = function (toolCallId, result) {
