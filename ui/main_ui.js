@@ -63,6 +63,22 @@ ui.layout(
                     </vertical>
                 </card>
 
+                {/* 流程历史 */}
+                <card w="*" h="auto" margin="8 16" cardCornerRadius="8dp" cardElevation="4dp">
+                    <vertical padding="16">
+                        <horizontal>
+                            <text text="流程历史" textSize="18sp" textStyle="bold" w="*" />
+                            <button id="refresh_history_btn" text="刷新" w="auto" style="Widget.AppCompat.Button.Borderless" />
+                            <button id="clear_history_btn" text="清空" w="auto" style="Widget.AppCompat.Button.Borderless" />
+                        </horizontal>
+                        <ScrollView id="history_scroll" h="150dp" marginTop="8" scrollbars="vertical">
+                            <vertical id="history_container" w="*" padding="4">
+                                <text id="history_empty_text" text="暂无流程历史" textSize="14sp" textColor="#999999" gravity="center" w="*" />
+                            </vertical>
+                        </ScrollView>
+                    </vertical>
+                </card>
+
                 {/* 设置按钮 */}
                 <button id="settings_btn"
                     text="设置"
@@ -182,10 +198,22 @@ function runTask() {
 
         updateStatus("完成", "#4CAF50");
         logger.info("==================================================");
-        logger.info("✅ " + result);
+        logger.info("✅ " + result.message);
         logger.info("==================================================");
+        
+        // 显示总结信息
+        if (result.summary) {
+            logger.info("📊 任务流程总结:");
+            logger.info("  目标: " + result.summary.taskGoal);
+            logger.info("  结果: " + (result.summary.success ? "成功" : "失败"));
+            logger.info("  步骤: " + result.summary.validSteps + "/" + result.summary.totalSteps + " 有效");
+            if (result.summary.standardFlow) {
+                logger.info("  标准流程:\n" + result.summary.standardFlow);
+            }
+        }
+        
         ui.run(function () {
-            toast(result);
+            toast(result.message);
         });
 
     } catch (e) {
@@ -200,6 +228,8 @@ function runTask() {
             ui.run_btn.setEnabled(true);
             ui.stop_btn.setEnabled(false);
             ui.task_input.setEnabled(true);
+            // 刷新流程历史列表
+            refreshFlowHistory();
         });
     }
 }
@@ -248,3 +278,245 @@ updateStatus("就绪", "#4CAF50");
 updateStep(0, 100);
 logger.info("AutoGLM Phone Agent 已启动");
 logger.info("请输入任务并点击执行");
+
+// ==================== 流程历史功能 ====================
+
+/**
+ * 格式化时间戳
+ * @param {string} isoString - ISO 时间字符串
+ * @returns {string} 格式化后的时间
+ */
+function formatTime(isoString) {
+    try {
+        var date = new Date(isoString);
+        var year = date.getFullYear();
+        var month = (date.getMonth() + 1).toString().padStart(2, '0');
+        var day = date.getDate().toString().padStart(2, '0');
+        var hour = date.getHours().toString().padStart(2, '0');
+        var minute = date.getMinutes().toString().padStart(2, '0');
+        return year + "-" + month + "-" + day + " " + hour + ":" + minute;
+    } catch (e) {
+        return isoString;
+    }
+}
+
+/**
+ * 截断文本
+ * @param {string} text - 原始文本
+ * @param {number} maxLen - 最大长度
+ * @returns {string} 截断后的文本
+ */
+function truncateText(text, maxLen) {
+    if (!text) return "";
+    if (text.length <= maxLen) return text;
+    return text.substring(0, maxLen) + "...";
+}
+
+/**
+ * 刷新流程历史列表
+ */
+function refreshFlowHistory() {
+    ui.run(function() {
+        var history = storage.getFlowHistory();
+        var container = ui.history_container;
+        
+        // 清空容器
+        container.removeAllViews();
+        
+        if (history.length === 0) {
+            // 显示空状态
+            var emptyText = ui.inflate(
+                <text text="暂无流程历史" textSize="14sp" textColor="#999999" gravity="center" w="*" padding="16" />,
+                container
+            );
+            container.addView(emptyText);
+            return;
+        }
+        
+        // 添加历史记录
+        for (var i = 0; i < history.length; i++) {
+            var flow = history[i];
+            var success = flow.success;
+            var statusColor = success ? "#4CAF50" : "#F44336";
+            var statusText = success ? "成功" : "失败";
+            
+            var cardView = ui.inflate(
+                <card w="*" h="auto" margin="4 4" cardCornerRadius="4dp" cardElevation="2dp" cardBackgroundColor="#FAFAFA">
+                    <vertical padding="12" w="*">
+                        <horizontal w="*" gravity="center_vertical">
+                            <text id="flow_task" textSize="14sp" textStyle="bold" w="*" maxLines="1" ellipsize="end" />
+                        </horizontal>
+                        <horizontal w="*" marginTop="4">
+                            <text id="flow_time" textSize="12sp" textColor="#666666" />
+                            <text text=" | " textSize="12sp" textColor="#999999" />
+                            <text id="flow_status" textSize="12sp" />
+                            <text text=" | " textSize="12sp" textColor="#999999" />
+                            <text id="flow_steps" textSize="12sp" textColor="#666666" />
+                        </horizontal>
+                        <horizontal w="*" marginTop="8">
+                            <button id="detail_btn" text="详情" w="auto" h="32dp" textSize="12sp" style="Widget.AppCompat.Button.Borderless.Colored" />
+                            <button id="reuse_btn" text="复用" w="auto" h="32dp" textSize="12sp" style="Widget.AppCompat.Button.Borderless.Colored" marginLeft="8" />
+                            <button id="delete_btn" text="删除" w="auto" h="32dp" textSize="12sp" style="Widget.AppCompat.Button.Borderless" marginLeft="8" textColor="#F44336" />
+                        </horizontal>
+                    </vertical>
+                </card>,
+                container
+            );
+            
+            // 设置数据
+            cardView.flow_task.setText(truncateText(flow.task, 30));
+            cardView.flow_time.setText(formatTime(flow.createdAt));
+            cardView.flow_status.setText(statusText);
+            cardView.flow_status.setTextColor(colors.parseColor(statusColor));
+            
+            var stepsInfo = "";
+            if (flow.summary) {
+                stepsInfo = flow.summary.validSteps + "/" + flow.summary.totalSteps + " 步";
+            } else {
+                stepsInfo = "--";
+            }
+            cardView.flow_steps.setText(stepsInfo);
+            
+            // 绑定事件（使用闭包保存 flow 引用）
+            (function(f) {
+                cardView.detail_btn.on("click", function() {
+                    showFlowDetailDialog(f);
+                });
+                
+                cardView.reuse_btn.on("click", function() {
+                    reuseFlow(f);
+                });
+                
+                cardView.delete_btn.on("click", function() {
+                    deleteFlowWithConfirm(f.id);
+                });
+            })(flow);
+            
+            container.addView(cardView);
+        }
+    });
+}
+
+/**
+ * 显示流程详情对话框
+ * @param {Object} flow - 流程记录
+ */
+function showFlowDetailDialog(flow) {
+    var summary = flow.summary || {};
+    
+    // 构建详情内容
+    var content = "";
+    
+    // 任务目标
+    content += "【任务目标】\n" + (summary.taskGoal || flow.task) + "\n\n";
+    
+    // 执行结果
+    var resultText = summary.success ? "成功 ✓" : "失败 ✗";
+    content += "【执行结果】" + resultText + "\n\n";
+    
+    // 步骤统计
+    content += "【步骤统计】\n";
+    content += "有效步骤: " + (summary.validSteps || 0) + "\n";
+    content += "无效步骤: " + (summary.invalidSteps || 0) + "\n";
+    content += "总步骤数: " + (summary.totalSteps || 0) + "\n\n";
+    
+    // 标准流程
+    if (summary.standardFlow) {
+        content += "【标准流程】\n" + summary.standardFlow + "\n\n";
+    }
+    
+    // 关键决策点
+    if (summary.keyDecisions && summary.keyDecisions.length > 0) {
+        content += "【关键决策点】\n";
+        for (var i = 0; i < summary.keyDecisions.length; i++) {
+            content += (i + 1) + ". " + summary.keyDecisions[i] + "\n";
+        }
+        content += "\n";
+    }
+    
+    // 注意事项
+    if (summary.tips && summary.tips.length > 0) {
+        content += "【注意事项】\n";
+        for (var j = 0; j < summary.tips.length; j++) {
+            content += "• " + summary.tips[j] + "\n";
+        }
+        content += "\n";
+    }
+    
+    // 无效步骤分析
+    if (summary.invalidStepAnalysis && summary.invalidStepAnalysis.length > 0) {
+        content += "【无效步骤分析】\n";
+        for (var k = 0; k < summary.invalidStepAnalysis.length; k++) {
+            content += "• " + summary.invalidStepAnalysis[k] + "\n";
+        }
+    }
+    
+    // 显示对话框
+    dialogs.build({
+        title: "流程详情",
+        content: content,
+        positive: "关闭",
+        neutral: "复用流程",
+        negative: "删除"
+    }).on("positive", function() {
+        // 关闭对话框
+    }).on("neutral", function() {
+        reuseFlow(flow);
+    }).on("negative", function() {
+        deleteFlowWithConfirm(flow.id);
+    }).show();
+}
+
+/**
+ * 复用流程（将标准流程填充到任务输入框）
+ * @param {Object} flow - 流程记录
+ */
+function reuseFlow(flow) {
+    var summary = flow.summary || {};
+    var standardFlow = summary.standardFlow || flow.task;
+    
+    ui.run(function() {
+        ui.task_input.setText(standardFlow);
+        toast("已填充标准流程到任务输入框");
+    });
+}
+
+/**
+ * 删除流程（带确认）
+ * @param {string} flowId - 流程 ID
+ */
+function deleteFlowWithConfirm(flowId) {
+    dialogs.confirm("确认删除", "确定要删除这条流程记录吗？", function(ok) {
+        if (ok) {
+            storage.deleteFlow(flowId);
+            toast("已删除");
+            refreshFlowHistory();
+        }
+    });
+}
+
+/**
+ * 清空所有流程历史
+ */
+function clearAllFlowHistory() {
+    dialogs.confirm("确认清空", "确定要清空所有流程历史吗？此操作不可恢复。", function(ok) {
+        if (ok) {
+            storage.clearFlowHistory();
+            toast("已清空流程历史");
+            refreshFlowHistory();
+        }
+    });
+}
+
+// 流程历史相关事件监听
+ui.refresh_history_btn.on("click", function() {
+    refreshFlowHistory();
+    toast("已刷新");
+});
+
+ui.clear_history_btn.on("click", function() {
+    clearAllFlowHistory();
+});
+
+// 初始化时加载流程历史
+refreshFlowHistory();

@@ -6,12 +6,14 @@
 var ModelClient = require('./model_client');
 var MessageBuilder = require('./message_builder');
 var ActionHandler = require('./action_handler');
+var FlowSummarizer = require('./flow_summarizer');
 var screenCapture = require('../accessibility/screen_capture');
 var appDetector = require('../accessibility/app_detector');
 var xmlParser = require('../accessibility/xml_parser');
 var SYSTEM_PROMPTS = require('../config/system_prompt');
 var timing = require('../config/timing');
 var logger = require('../utils/logger');
+var storage = require('../config/storage');
 
 function PhoneAgent(modelConfig, agentConfig) {
     // Agent 配置
@@ -30,6 +32,9 @@ function PhoneAgent(modelConfig, agentConfig) {
     // 模型配置 - 传入 screenMode
     modelConfig.screenMode = this.screenMode;
     this.modelClient = new ModelClient(modelConfig);
+    
+    // 保存模型配置（用于总结器）
+    this.modelConfig = modelConfig;
 
     // Function Call 配置
     // 默认启用 function call 模式，可通过 modelConfig.useFunctionCall = false 禁用
@@ -45,6 +50,14 @@ function PhoneAgent(modelConfig, agentConfig) {
     this.context = [];
     this.stepCount = 0;
     this.isRunning = false;
+    
+    // 总结功能配置
+    this.summaryConfig = agentConfig.summary || {};
+    this.summaryEnabled = this.summaryConfig.enabled !== false;
+    this.summaryTrigger = this.summaryConfig.trigger || 'on_success';
+    
+    // 流程总结器（延迟初始化）
+    this.flowSummarizer = null;
 }
 
 /**
@@ -274,9 +287,16 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
  * 运行任务 - 优化后的主循环
  * @param {string} task - 任务描述
  * @param {Function} onStep - 步骤回调 (可选)
- * @returns {string} 最终消息
+ * @returns {Object} 结果对象 {message, summary, success, stepCount}
  */
 PhoneAgent.prototype.run = function (task, onStep) {
+    var taskResult = {
+        message: "",
+        summary: null,
+        success: false,
+        stepCount: 0
+    };
+    
     try {
         this.isRunning = true;
         this.context = [];
@@ -318,7 +338,24 @@ PhoneAgent.prototype.run = function (task, onStep) {
 
             // 4.5 检查是否完成
             if (result.finished) {
-                return result.message || "任务完成";
+                taskResult.message = result.message || "任务完成";
+                taskResult.success = result.success;
+                taskResult.stepCount = this.stepCount;
+                
+                // 生成任务流程总结
+                if (this.shouldGenerateSummary(result)) {
+                    taskResult.summary = this.generateSummary(task);
+                    
+                    // 保存流程总结到存储
+                    if (taskResult.summary) {
+                        var savedFlow = storage.saveFlowSummary(task, taskResult.summary);
+                        if (savedFlow) {
+                            logger.info("流程总结已保存, ID: " + savedFlow.id);
+                        }
+                    }
+                }
+                
+                return taskResult;
             }
 
             // 4.6 更新屏幕状态用于下一轮
@@ -330,14 +367,20 @@ PhoneAgent.prototype.run = function (task, onStep) {
         }
 
         if (!this.isRunning) {
-            return "任务已取消";
+            taskResult.message = "任务已取消";
+            taskResult.stepCount = this.stepCount;
+            return taskResult;
         }
 
-        return "达到最大步数限制";
+        taskResult.message = "达到最大步数限制";
+        taskResult.stepCount = this.stepCount;
+        return taskResult;
 
     } catch (e) {
         logger.error("任务执行失败: " + e);
-        return "任务失败: " + e;
+        taskResult.message = "任务失败: " + e;
+        taskResult.stepCount = this.stepCount;
+        return taskResult;
     } finally {
         this.isRunning = false;
     }
@@ -460,6 +503,91 @@ PhoneAgent.prototype.getContext = function () {
  */
 PhoneAgent.prototype.getStepCount = function () {
     return this.stepCount;
+};
+
+/**
+ * 判断是否需要生成总结
+ * @param {Object} result - 任务执行结果
+ * @returns {boolean} 是否需要生成总结
+ */
+PhoneAgent.prototype.shouldGenerateSummary = function(result) {
+    if (!this.summaryEnabled) {
+        return false;
+    }
+    
+    if (this.summaryTrigger === 'on_success') {
+        return result.success === true;
+    } else if (this.summaryTrigger === 'on_complete') {
+        return true;
+    } else if (this.summaryTrigger === 'manual') {
+        return false;
+    }
+    
+    return false;
+};
+
+/**
+ * 生成任务流程总结
+ * @param {string} task - 任务描述
+ * @returns {Object|null} 总结结果
+ */
+PhoneAgent.prototype.generateSummary = function(task) {
+    try {
+        logger.info("正在生成任务流程总结...");
+        
+        // 延迟初始化总结器
+        if (!this.flowSummarizer) {
+            this.flowSummarizer = new FlowSummarizer({
+                apiKey: this.modelConfig.apiKey,
+                baseUrl: this.modelConfig.baseUrl,
+                modelName: this.modelConfig.modelName,
+                lang: this.lang
+            });
+        }
+        
+        var result = this.flowSummarizer.summarize(task, this.context, this.lang);
+        
+        if (result.success) {
+            logger.info("任务流程总结生成成功");
+            return result.summary;
+        } else {
+            logger.error("任务流程总结生成失败: " + result.error);
+            return null;
+        }
+    } catch (e) {
+        logger.error("生成总结失败: " + e);
+        return null;
+    }
+};
+
+/**
+ * 手动触发总结（用于 trigger='manual' 场景）
+ * @param {string} task - 任务描述
+ * @returns {Object|null} 总结结果
+ */
+PhoneAgent.prototype.summarize = function(task) {
+    return this.generateSummary(task);
+};
+
+/**
+ * 设置总结配置
+ * @param {Object} config - 总结配置
+ */
+PhoneAgent.prototype.setSummaryConfig = function(config) {
+    this.summaryConfig = config || {};
+    this.summaryEnabled = this.summaryConfig.enabled !== false;
+    this.summaryTrigger = this.summaryConfig.trigger || 'on_success';
+};
+
+/**
+ * 获取总结配置
+ * @returns {Object} 总结配置
+ */
+PhoneAgent.prototype.getSummaryConfig = function() {
+    return {
+        enabled: this.summaryEnabled,
+        trigger: this.summaryTrigger
+    };
 };
 
 module.exports = PhoneAgent;

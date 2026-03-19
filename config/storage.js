@@ -255,4 +255,143 @@ Storage.prototype.setLogConfig = function (config) {
     this.set("log_level", config.level);
 };
 
+// ==================== 流程历史存储功能 ====================
+
+/**
+ * 流程历史存储名称
+ */
+var FLOW_STORAGE_NAME = "autoglm_flow_history";
+
+/**
+ * 生成唯一 ID
+ * @returns {string} 唯一 ID
+ */
+function generateFlowId() {
+    var timestamp = Date.now();
+    var random = Math.floor(Math.random() * 10000);
+    return timestamp + "_" + random;
+}
+
+/**
+ * 获取流程历史存储
+ * @returns {Object} storages 对象
+ */
+function getFlowStorage() {
+    return storages.create(FLOW_STORAGE_NAME);
+}
+
+/**
+ * 保存流程总结
+ * @param {string} task - 原始任务描述
+ * @param {Object} summary - 总结对象
+ * @returns {Object} 保存的流程记录
+ */
+Storage.prototype.saveFlowSummary = function(task, summary) {
+    try {
+        var flowStorage = getFlowStorage();
+        var history = flowStorage.get("history") || [];
+        
+        var flowRecord = {
+            id: generateFlowId(),
+            task: task,
+            summary: summary,
+            createdAt: new Date().toISOString(),
+            success: summary ? summary.success : false
+        };
+        
+        // 添加到历史开头（最新的在前）
+        history.unshift(flowRecord);
+        
+        // 限制历史记录数量（最多保存 50 条）
+        if (history.length > 50) {
+            history = history.slice(0, 50);
+        }
+        
+        flowStorage.put("history", history);
+        console.log("流程总结已保存, ID: " + flowRecord.id);
+        
+        return flowRecord;
+    } catch (e) {
+        console.error("保存流程总结失败: " + e);
+        return null;
+    }
+};
+
+/**
+ * 获取所有流程历史
+ * @returns {Array} 流程历史列表
+ */
+Storage.prototype.getFlowHistory = function() {
+    try {
+        var flowStorage = getFlowStorage();
+        var history = flowStorage.get("history") || [];
+        return history;
+    } catch (e) {
+        console.error("获取流程历史失败: " + e);
+        return [];
+    }
+};
+
+/**
+ * 根据 ID 获取流程
+ * @param {string} id - 流程 ID
+ * @returns {Object|null} 流程记录或 null
+ */
+Storage.prototype.getFlowById = function(id) {
+    try {
+        var history = this.getFlowHistory();
+        for (var i = 0; i < history.length; i++) {
+            if (history[i].id === id) {
+                return history[i];
+            }
+        }
+        return null;
+    } catch (e) {
+        console.error("获取流程失败: " + e);
+        return null;
+    }
+};
+
+/**
+ * 删除流程
+ * @param {string} id - 流程 ID
+ * @returns {boolean} 是否删除成功
+ */
+Storage.prototype.deleteFlow = function(id) {
+    try {
+        var flowStorage = getFlowStorage();
+        var history = flowStorage.get("history") || [];
+        
+        var newHistory = [];
+        for (var i = 0; i < history.length; i++) {
+            if (history[i].id !== id) {
+                newHistory.push(history[i]);
+            }
+        }
+        
+        flowStorage.put("history", newHistory);
+        console.log("流程已删除, ID: " + id);
+        return true;
+    } catch (e) {
+        console.error("删除流程失败: " + e);
+        return false;
+    }
+};
+
+/**
+ * 清空流程历史
+ * @returns {boolean} 是否清空成功
+ */
+Storage.prototype.clearFlowHistory = function() {
+    try {
+        var flowStorage = getFlowStorage();
+        flowStorage.put("history", []);
+        console.log("流程历史已清空");
+        return true;
+    } catch (e) {
+        console.error("清空流程历史失败: " + e);
+        return false;
+    }
+};
+
 module.exports = new Storage();
