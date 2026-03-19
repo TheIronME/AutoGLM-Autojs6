@@ -278,6 +278,44 @@ var FUNCTION_TOOLS = [
     {
         type: "function",
         function: {
+            name: "get_package_name",
+            description: "根据应用名称查询应用的包名。支持中英文名称、模糊匹配。当需要启动应用但只知道应用名称时，先调用此函数获取包名，然后使用 do_launch 启动。",
+            parameters: {
+                type: "object",
+                properties: {
+                    app_name: {
+                        type: "string",
+                        description: "应用名称，支持中英文，如 '微信'、'WeChat'、'抖音'、'TikTok' 等"
+                    }
+                },
+                required: ["app_name"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "list_all_apps",
+            description: "获取设备上所有已安装应用的列表，返回应用名称和包名的对应关系。当不确定应用的确切名称或需要浏览可用应用时使用。",
+            parameters: {
+                type: "object",
+                properties: {
+                    filter: {
+                        type: "string",
+                        description: "可选的过滤关键词，用于筛选包含该关键词的应用（不区分大小写）"
+                    },
+                    limit: {
+                        type: "integer",
+                        description: "返回结果的最大数量，默认 50，最大 200"
+                    }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
             name: "finish",
             description: "任务完成，结束执行流程。当用户任务已完成或无法继续时调用。",
             parameters: {
@@ -313,6 +351,8 @@ var TOOL_ACTION_MAP = {
     "do_note": "Note",
     "do_call_api": "Call_API",
     "do_interact": "Interact",
+    "get_package_name": "GetPackageName",
+    "list_all_apps": "ListAllApps",
     "finish": "finish"
 };
 

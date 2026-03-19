@@ -6,6 +6,7 @@
 var deviceControl = require('../accessibility/device_control');
 var textInput = require('../accessibility/text_input');
 var logger = require('../utils/logger');
+var appInfo = require('../config/app_info');
 
 function ActionHandler(screenMode) {
     var self = this;
@@ -26,7 +27,10 @@ function ActionHandler(screenMode) {
         'Take_over': function (a, w, h) { return self.handleTakeover(a, w, h); },
         'Note': function (a, w, h) { return self.handleNote(a, w, h); },
         'Call_API': function (a, w, h) { return self.handleCallAPI(a, w, h); },
-        'Interact': function (a, w, h) { return self.handleInteract(a, w, h); }
+        'Interact': function (a, w, h) { return self.handleInteract(a, w, h); },
+        // 应用信息查询
+        'GetPackageName': function (a, w, h) { return self.handleGetPackageName(a); },
+        'ListAllApps': function (a, w, h) { return self.handleListAllApps(a); }
     };
 }
 
@@ -383,6 +387,137 @@ ActionHandler.prototype.handleInteract = function (action, width, height) {
         shouldFinish: false,
         message: "需要用户交互选择"
     };
+};
+
+/**
+ * 处理获取应用包名请求
+ * 根据应用名称查询包名
+ */
+ActionHandler.prototype.handleGetPackageName = function (action) {
+    var appName = action.app_name;
+
+    if (!appName) {
+        logger.warn("获取包名失败: 缺少 app_name 参数");
+        return {
+            success: false,
+            shouldFinish: false,
+            message: "缺少 app_name 参数"
+        };
+    }
+
+    logger.info("查询应用包名: " + appName);
+
+    try {
+        var packageName = appInfo.getPackageName(appName);
+
+        if (packageName) {
+            logger.info("找到包名: " + appName + " -> " + packageName);
+            return {
+                success: true,
+                shouldFinish: false,
+                app_name: appName,
+                package_name: packageName,
+                message: "应用 '" + appName + "' 的包名是: " + packageName
+            };
+        } else {
+            logger.warn("未找到应用包名: " + appName);
+            return {
+                success: false,
+                shouldFinish: false,
+                app_name: appName,
+                package_name: null,
+                message: "未找到应用 '" + appName + "' 的包名，请确认应用名称是否正确"
+            };
+        }
+    } catch (e) {
+        logger.error("查询包名失败: " + e);
+        return {
+            success: false,
+            shouldFinish: false,
+            app_name: appName,
+            package_name: null,
+            message: "查询包名失败: " + e
+        };
+    }
+};
+
+/**
+ * 处理列出所有应用请求
+ * 获取设备上所有已安装应用的列表
+ */
+ActionHandler.prototype.handleListAllApps = function (action) {
+    var filter = action.filter || null;
+    var limit = action.limit || 50;
+
+    // 限制最大返回数量
+    if (limit > 200) {
+        limit = 200;
+    }
+    if (limit < 1) {
+        limit = 50;
+    }
+
+    logger.info("列出所有应用, filter=" + (filter || "无") + ", limit=" + limit);
+
+    try {
+        var allApps = appInfo.getAllApps();
+        var appsList = [];
+        var count = 0;
+
+        // 遍历所有应用
+        for (var name in allApps) {
+            if (allApps.hasOwnProperty(name)) {
+                var packageName = allApps[name];
+
+                // 如果有过滤条件，检查是否匹配
+                if (filter) {
+                    var filterLower = filter.toLowerCase();
+                    var nameLower = name.toLowerCase();
+                    var packageLower = packageName.toLowerCase();
+
+                    // 检查应用名称或包名是否包含过滤关键词
+                    if (nameLower.indexOf(filterLower) === -1 &&
+                        packageLower.indexOf(filterLower) === -1) {
+                        continue;
+                    }
+                }
+
+                appsList.push({
+                    name: name,
+                    package_name: packageName
+                });
+                count++;
+
+                // 达到限制数量则停止
+                if (count >= limit) {
+                    break;
+                }
+            }
+        }
+
+        var totalApps = Object.keys(allApps).length;
+        logger.info("返回 " + appsList.length + " 个应用 (总共 " + totalApps + " 个)");
+
+        return {
+            success: true,
+            shouldFinish: false,
+            total: totalApps,
+            returned: appsList.length,
+            apps: appsList,
+            message: "找到 " + totalApps + " 个应用，返回 " + appsList.length + " 个" +
+                     (filter ? " (过滤条件: " + filter + ")" : "")
+        };
+    } catch (e) {
+        logger.error("获取应用列表失败: " + e);
+        return {
+            success: false,
+            shouldFinish: false,
+            total: 0,
+            returned: 0,
+            apps: [],
+            message: "获取应用列表失败: " + e
+        };
+    }
 };
 
 /**
