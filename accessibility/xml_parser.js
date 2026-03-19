@@ -20,7 +20,7 @@ function XmlParser() {
 XmlParser.prototype.getUiTree = function () {
     try {
         // 获取当前窗口的根元素
-        var root = auto.rootInActiveWindow();
+        var root = auto.rootInActiveWindow;
         
         if (!root) {
             logger.warn("无法获取窗口根元素");
@@ -132,7 +132,7 @@ XmlParser.prototype.buildTree = function (node, depth) {
  */
 XmlParser.prototype.getSimplifiedElements = function () {
     try {
-        var root = auto.rootInActiveWindow();
+        var root = auto.rootInActiveWindow;
         
         if (!root) {
             logger.warn("无法获取窗口根元素");
