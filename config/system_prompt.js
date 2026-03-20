@@ -32,6 +32,8 @@ var SYSTEM_PROMPTS = {
 
 | 工具 | 用途 |
 |------|------|
+| get_package_name | **根据应用名称查询包名（启动应用前必须调用）** |
+| list_all_apps | 获取设备上所有已安装应用的列表 |
 | do_launch | **启动目标应用（唯一方式）** |
 | do_tap | 点击坐标 [x,y] |
 | do_double_tap | 双击坐标 |
@@ -43,10 +45,11 @@ var SYSTEM_PROMPTS = {
 | do_wait | 等待指定时长 |
 | finish | 结束任务并提交完成信息 |
 
-**重要规则**：
-- **启动应用必须使用 do_launch 工具**，这是启动应用的唯一方式
-- **优先使用包名（package_name）参数**启动应用，以确保准确性
-- 不要尝试通过点击屏幕图标来启动应用，必须使用 do_launch
+**使用建议**：
+- 启动应用请使用 do_launch 工具
+- 建议先调用 get_package_name 获取包名，再使用包名启动应用，这样更准确
+- 如果已知包名，可直接使用 package_name 参数启动
+- 不建议通过点击屏幕图标来启动应用
 - 详细的参数定义通过 tools 参数（JSON Schema）提供
 
 ---
@@ -65,7 +68,7 @@ var SYSTEM_PROMPTS = {
 
 ## 一、预检查规则
 
-1. **应用检查**：执行任何操作前，检查当前应用是否为目标应用。如果不是，先启动目标应用
+1. **应用检查**：执行任何操作前，检查当前应用是否为目标应用。如果不是，先使用工具"do_launch"+"get_package_name"启动目标应用
 
 2. **页面导航**：
    - 进入无关页面时，先返回
@@ -140,7 +143,9 @@ var SYSTEM_PROMPTS = {
 
 ## 何时使用各工具
 
-- **do_launch**：**启动应用的唯一方式**。当需要启动或切换应用时必须使用此工具。优先使用 package_name 参数（包名）以确保准确性，如不知道包名可使用 app_name 参数
+- **get_package_name**：根据应用名称查询包名，支持中英文名称和模糊匹配。建议在启动应用前调用以获取准确的包名
+- **list_all_apps**：获取设备上所有已安装应用的列表，当不确定应用名称时使用
+- **do_launch**：启动应用。建议使用 package_name 参数启动应用以确保准确性
 - **do_tap**：点击按钮、选择项目、与UI元素交互时使用
 - **do_double_tap**：缩放、选择文本或打开需要双击的项目时使用
 - **do_long_press**：触发上下文菜单、选择文本或激活长按交互时使用
@@ -151,16 +156,17 @@ var SYSTEM_PROMPTS = {
 - **do_wait**：等待页面加载时使用
 - **finish**：任务完成或无法继续时使用
 
-## 启动应用规则
+## 启动应用流程
 
-**严格规则**：启动目标应用必须使用 do_launch 工具，禁止通过点击屏幕图标来启动应用。
+建议按以下流程启动应用：
+1. 调用 get_package_name 获取包名
+2. 使用 do_launch(package_name="包名") 启动应用
 
-正确示例：
-- `do_launch(package_name="com.tencent.mm")` - 通过包名启动微信
-- `do_launch(app_name="微信")` - 通过应用名启动微信（当不知道包名时）
+示例：
+- 步骤1: get_package_name(app_name="微信") → 返回 "com.tencent.mm"
+- 步骤2: do_launch(package_name="com.tencent.mm") 启动微信
 
-错误示例：
-- ❌ 使用 do_tap 点击桌面图标启动应用
+如果已知包名，可直接使用 do_launch(package_name="包名") 启动应用。
 
 ## 工具调用流程
 
@@ -196,6 +202,8 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 | Tool | Purpose |
 |------|---------|
+| get_package_name | **Query package name by app name (MUST call before launching app)** |
+| list_all_apps | Get list of all installed apps on device |
 | do_launch | **Start the target app (ONLY way)** |
 | do_tap | Click at coordinates [x,y] |
 | do_double_tap | Double tap at coordinates |
@@ -207,10 +215,11 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_wait | Wait for specified duration |
 | finish | End the task with completion message |
 
-**Important Rules**:
-- **Starting an app MUST use do_launch tool**, this is the only way to launch apps
-- **Prefer package_name parameter** to ensure accuracy when launching apps
-- Do NOT attempt to launch apps by tapping screen icons, must use do_launch
+**Usage Suggestions**:
+- Please use do_launch tool to start apps
+- It is recommended to call get_package_name first to get the package name, then launch the app with package_name for better accuracy
+- If you already know the package name, you can directly use package_name parameter to launch
+- It is not recommended to launch apps by tapping screen icons
 - Detailed parameter definitions are provided via the tools parameter (JSON Schema)
 
 ---
@@ -304,7 +313,9 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 ## When to Use Each Tool
 
-- **do_launch**: **The ONLY way to start an app**. Must use this tool when starting or switching apps. Prefer package_name parameter for accuracy, or use app_name if package name is unknown
+- **get_package_name**: Query package name by app name, supports Chinese/English names and fuzzy matching. It is recommended to call this before launching an app to get the accurate package name
+- **list_all_apps**: Get list of all installed apps on device, use when unsure about app name
+- **do_launch**: Launch an app. It is recommended to use package_name parameter for better accuracy
 - **do_tap**: Use for clicking buttons, selecting items, interacting with UI elements
 - **do_double_tap**: Use for zooming, selecting text, or opening items that require double tap
 - **do_long_press**: Use for triggering context menus, selecting text, or activating long press interactions
@@ -315,16 +326,17 @@ All phone operations are performed by calling the corresponding tool functions. 
 - **do_wait**: Use for waiting page to load
 - **finish**: Use when task is complete or cannot proceed
 
-## App Launch Rules
+## App Launch Process
 
-**Strict Rule**: Starting a target app MUST use do_launch tool. Do NOT launch apps by tapping screen icons.
+It is recommended to follow this process to launch an app:
+1. Call get_package_name to get the package name
+2. Use do_launch(package_name="package_name") to launch the app
 
-Correct examples:
-- `do_launch(package_name="com.tencent.mm")` - Launch WeChat by package name
-- `do_launch(app_name="WeChat")` - Launch WeChat by app name (when package name is unknown)
+Example:
+- Step 1: get_package_name(app_name="WeChat") → returns "com.tencent.mm"
+- Step 2: do_launch(package_name="com.tencent.mm") to launch WeChat
 
-Incorrect example:
-- ❌ Using do_tap to click desktop icon to launch app
+If you already know the package name, you can directly use do_launch(package_name="package_name") to launch the app.
 
 ## Tool Call Flow
 
@@ -364,6 +376,8 @@ Incorrect example:
 
 | 工具 | 用途 |
 |------|------|
+| get_package_name | **根据应用名称查询包名（启动应用前必须调用）** |
+| list_all_apps | 获取设备上所有已安装应用的列表 |
 | do_launch | **启动目标应用（唯一方式）** |
 | do_tap | 点击坐标 [x,y] |
 | do_double_tap | 双击坐标 |
@@ -375,10 +389,11 @@ Incorrect example:
 | do_wait | 等待指定时长 |
 | finish | 结束任务并提交完成信息 |
 
-**重要规则**：
-- **启动应用必须使用 do_launch 工具**，这是启动应用的唯一方式
-- **优先使用包名（package_name）参数**启动应用，以确保准确性
-- 不要尝试通过点击屏幕图标来启动应用，必须使用 do_launch
+**使用建议**：
+- 启动应用请使用 do_launch 工具
+- 建议先调用 get_package_name 获取包名，再使用包名启动应用，这样更准确
+- 如果已知包名，可直接使用 package_name 参数启动
+- 不建议通过点击屏幕图标来启动应用
 - 详细的参数定义通过 tools 参数（JSON Schema）提供
 
 ---
@@ -471,7 +486,9 @@ Incorrect example:
 
 ## 何时使用各工具
 
-- **do_launch**：**启动应用的唯一方式**。当需要启动或切换应用时必须使用此工具。优先使用 package_name 参数（包名）以确保准确性，如不知道包名可使用 app_name 参数
+- **get_package_name**：根据应用名称查询包名，支持中英文名称和模糊匹配。建议在启动应用前调用以获取准确的包名
+- **list_all_apps**：获取设备上所有已安装应用的列表，当不确定应用名称时使用
+- **do_launch**：启动应用。建议使用 package_name 参数启动应用以确保准确性
 - **do_tap**：点击按钮、选择项目、与UI元素交互时使用
 - **do_double_tap**：缩放、选择文本或打开需要双击的项目时使用
 - **do_long_press**：触发上下文菜单、选择文本或激活长按交互时使用
@@ -482,16 +499,17 @@ Incorrect example:
 - **do_wait**：等待页面加载时使用
 - **finish**：任务完成或无法继续时使用
 
-## 启动应用规则
+## 启动应用流程
 
-**严格规则**：启动目标应用必须使用 do_launch 工具，禁止通过点击屏幕图标来启动应用。
+建议按以下流程启动应用：
+1. 调用 get_package_name 获取包名
+2. 使用 do_launch(package_name="包名") 启动应用
 
-正确示例：
-- 通过包名启动：do_launch(package_name="com.tencent.mm") 启动微信
-- 通过应用名启动：do_launch(app_name="微信") 启动微信（当不知道包名时）
+示例：
+- 步骤1: get_package_name(app_name="微信") → 返回 "com.tencent.mm"
+- 步骤2: do_launch(package_name="com.tencent.mm") 启动微信
 
-错误示例：
-- 错误：使用 do_tap 点击桌面图标启动应用
+如果已知包名，可直接使用 do_launch(package_name="包名") 启动应用。
 
 ## 工具调用流程
 
@@ -527,6 +545,8 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 | Tool | Purpose |
 |------|---------|
+| get_package_name | **Query package name by app name (MUST call before launching app)** |
+| list_all_apps | Get list of all installed apps on device |
 | do_launch | **Start the target app (ONLY way)** |
 | do_tap | Click at coordinates [x,y] |
 | do_double_tap | Double tap at coordinates |
@@ -538,10 +558,11 @@ All phone operations are performed by calling the corresponding tool functions. 
 | do_wait | Wait for specified duration |
 | finish | End the task with completion message |
 
-**Important Rules**:
-- **Starting an app MUST use do_launch tool**, this is the only way to launch apps
-- **Prefer package_name parameter** to ensure accuracy when launching apps
-- Do NOT attempt to launch apps by tapping screen icons, must use do_launch
+**Usage Suggestions**:
+- Please use do_launch tool to start apps
+- It is recommended to call get_package_name first to get the package name, then launch the app with package_name for better accuracy
+- If you already know the package name, you can directly use package_name parameter to launch
+- It is not recommended to launch apps by tapping screen icons
 - Detailed parameter definitions are provided via the tools parameter (JSON Schema)
 
 ---
@@ -634,7 +655,9 @@ All phone operations are performed by calling the corresponding tool functions. 
 
 ## When to Use Each Tool
 
-- **do_launch**: **The ONLY way to start an app**. Must use this tool when starting or switching apps. Prefer package_name parameter for accuracy, or use app_name if package name is unknown
+- **get_package_name**: Query package name by app name, supports Chinese/English names and fuzzy matching. It is recommended to call this before launching an app to get the accurate package name
+- **list_all_apps**: Get list of all installed apps on device, use when unsure about app name
+- **do_launch**: Launch an app. It is recommended to use package_name parameter for better accuracy
 - **do_tap**: Use for clicking buttons, selecting items, interacting with UI elements
 - **do_double_tap**: Use for zooming, selecting text, or opening items that require double tap
 - **do_long_press**: Use for triggering context menus, selecting text, or activating long press interactions
@@ -645,16 +668,17 @@ All phone operations are performed by calling the corresponding tool functions. 
 - **do_wait**: Use for waiting page to load
 - **finish**: Use when task is complete or cannot proceed
 
-## App Launch Rules
+## App Launch Process
 
-**Strict Rule**: Starting a target app MUST use do_launch tool. Do NOT launch apps by tapping screen icons.
+It is recommended to follow this process to launch an app:
+1. Call get_package_name to get the package name
+2. Use do_launch(package_name="package_name") to launch the app
 
-Correct examples:
-- Launch by package name: do_launch(package_name="com.tencent.mm") to launch WeChat
-- Launch by app name: do_launch(app_name="WeChat") when package name is unknown
+Example:
+- Step 1: get_package_name(app_name="WeChat") → returns "com.tencent.mm"
+- Step 2: do_launch(package_name="com.tencent.mm") to launch WeChat
 
-Incorrect example:
-- Wrong: Using do_tap to click desktop icon to launch app
+If you already know the package name, you can directly use do_launch(package_name="package_name") to launch the app.
 
 ## Tool Call Flow
 

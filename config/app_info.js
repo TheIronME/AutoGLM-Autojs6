@@ -1,7 +1,7 @@
 /**
  * 应用信息动态获取模块
- * 优先使用 app.getInstalledApps() API 动态获取已安装应用列表
- * 当 API 不可用或找不到时，回退到静态映射表 APP_PACKAGES
+ * 优先使用 Java API (PackageManager) 动态获取已安装应用列表
+ * 当 Java API 不可用时，回退到静态映射表 APP_PACKAGES
  */
 
 var APP_PACKAGES = require('./apps');
@@ -21,28 +21,65 @@ var installedAppsCache = null;
 var cacheInitialized = false;
 
 /**
- * 获取已安装应用列表（使用 app.getInstalledApps API）
- * @returns {Array|null} ApplicationInfo 数组，API 不可用时返回 null
+ * 使用 Java API (PackageManager) 获取已安装应用列表
+ * @returns {Array|null} 应用信息数组，每个元素包含 {packageName, appName}，API 不可用时返回 null
  */
-function getInstalledAppsList() {
+function getInstalledAppsByJavaApi() {
     try {
-        // 检查 API 是否可用
-        if (typeof app !== 'undefined' && typeof app.getInstalledApps === 'function') {
-            var apps = app.getInstalledApps();
-            logger.debug("app.getInstalledApps() 返回 " + (apps ? apps.length : 0) + " 个应用");
-            return apps;
+        // 导入必要的 Java 类
+        importClass(android.content.pm.ApplicationInfo);
+        importClass(android.content.pm.PackageManager);
+        
+        var pm = context.getPackageManager();
+        var appList = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        var appArray = appList.toArray();
+        
+        var result = [];
+        for (var i = 0; i < appArray.length; i++) {
+            var appInfo = appArray[i];
+            try {
+                var packageName = appInfo.packageName;
+                var appName = appInfo.loadLabel(pm);
+                
+                result.push({
+                    packageName: packageName,
+                    appName: String(appName),
+                    isSystemApp: (appInfo.flags & ApplicationInfo.FLAG_SYSTEM) !== 0
+                });
+            } catch (e) {
+                // 单个应用信息获取失败，跳过
+                logger.debug("获取应用信息失败: " + e);
+            }
         }
-        logger.debug("app.getInstalledApps API 不可用");
-        return null;
+        
+        logger.debug("Java API 获取到 " + result.length + " 个应用");
+        return result;
     } catch (e) {
-        logger.warn("调用 app.getInstalledApps 失败: " + e);
+        logger.warn("Java API 获取应用列表失败: " + e);
         return null;
     }
 }
 
 /**
+ * 获取已安装应用列表
+ * 优先使用 Java API (PackageManager)，这是最可靠的方案
+ * @returns {Array|null} 应用信息数组，API 不可用时返回 null
+ */
+function getInstalledAppsList() {
+    // 优先使用 Java API (PackageManager)
+    var javaApps = getInstalledAppsByJavaApi();
+    if (javaApps && javaApps.length > 0) {
+        return javaApps;
+    }
+    
+    // Java API 不可用时返回 null，将使用静态映射表
+    logger.debug("无法获取已安装应用列表，将使用静态映射表");
+    return null;
+}
+
+/**
  * 构建已安装应用的名称到包名映射缓存
- * 从 ApplicationInfo 数组中提取应用名称和包名
+ * 从应用信息数组中提取应用名称和包名
  */
 function buildInstalledAppsCache() {
     var apps = getInstalledAppsList();
@@ -60,9 +97,9 @@ function buildInstalledAppsCache() {
         if (appInfo && appInfo.packageName) {
             var packageName = appInfo.packageName;
             
-            // 尝试获取应用名称
-            // ApplicationInfo 可能包含 name 或 label 属性
-            var appName = appInfo.name || appInfo.label || null;
+            // 获取应用名称
+            // Java API 返回的数据结构: {packageName, appName, isSystemApp}
+            var appName = appInfo.appName || appInfo.name || appInfo.label || null;
             
             if (appName) {
                 // 添加原始名称映射
