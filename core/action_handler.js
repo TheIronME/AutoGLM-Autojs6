@@ -42,21 +42,27 @@ function ActionHandler(screenMode) {
  * @returns {Object} {success, shouldFinish, message}
  */
 ActionHandler.prototype.execute = function (action, screenWidth, screenHeight) {
+    var executeStartTime = Date.now();
+    var actionName = 'unknown';
     try {
         // 处理 finish 动作
         if (action._metadata === 'finish') {
+            actionName = 'finish';
+            logger.debug("执行动作: finish - 耗时: " + (Date.now() - executeStartTime) + "ms");
             return {
                 success: true,
                 shouldFinish: true,
-                message: action.message || "任务完成"
+                message: action.message || "任务完成",
+                elapsed: Date.now() - executeStartTime
             };
         }
 
         // 处理 do 动作
         if (action._metadata === 'do') {
-            var actionName = action.action;
+            actionName = action.action;
 
             logger.info("执行动作: " + actionName);
+            logger.debug("动作参数: " + JSON.stringify(action));
 
             // 获取处理函数
             var handler = this.actionHandlers[actionName];
@@ -66,12 +72,21 @@ ActionHandler.prototype.execute = function (action, screenWidth, screenHeight) {
                 return {
                     success: false,
                     shouldFinish: false,
-                    message: "未知动作: " + actionName
+                    message: "未知动作: " + actionName,
+                    elapsed: Date.now() - executeStartTime
                 };
             }
 
             // 执行动作
-            return handler(action, screenWidth, screenHeight);
+            var handlerStartTime = Date.now();
+            var result = handler(action, screenWidth, screenHeight);
+            var handlerElapsed = Date.now() - handlerStartTime;
+
+            logger.debug("动作执行详情 - " + actionName + ": 耗时 " + handlerElapsed + "ms, 结果: " + (result.success ? "成功" : "失败"));
+
+            result.elapsed = handlerElapsed;
+            result.actionName = actionName;
+            return result;
         }
 
         // 未知的 _metadata
@@ -79,15 +94,18 @@ ActionHandler.prototype.execute = function (action, screenWidth, screenHeight) {
         return {
             success: false,
             shouldFinish: true,
-            message: "未知动作类型: " + action._metadata
+            message: "未知动作类型: " + action._metadata,
+            elapsed: Date.now() - executeStartTime
         };
 
     } catch (e) {
-        logger.error("动作执行失败: " + e);
+        var elapsed = Date.now() - executeStartTime;
+        logger.error("动作执行失败: " + e + " (耗时: " + elapsed + "ms)");
         return {
             success: false,
             shouldFinish: false,
-            message: "动作执行失败: " + e
+            message: "动作执行失败: " + e,
+            elapsed: elapsed
         };
     }
 };

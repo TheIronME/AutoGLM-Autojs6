@@ -438,8 +438,10 @@ ModelClient.prototype.setScreenMode = function (mode) {
  * @returns {Object} 模型响应 {thinking, action, rawContent, toolCalls}
  */
 ModelClient.prototype.request = function (messages, useFunctionCall) {
+    var requestStartTime = Date.now();
     try {
         logger.info("正在请求模型...");
+        logger.debug("LLM请求开始 - 模型: " + this.modelName + ", 消息数: " + messages.length);
 
         // 默认使用 function call 模式
         if (useFunctionCall === undefined || useFunctionCall === null) {
@@ -464,6 +466,9 @@ ModelClient.prototype.request = function (messages, useFunctionCall) {
             requestData.tool_choice = "auto";
         }
 
+        logger.debug("LLM请求数据准备完成 - 耗时: " + (Date.now() - requestStartTime) + "ms");
+
+        var httpStartTime = Date.now();
         var response = httpClient.postJson(url, requestData, {
             headers: {
                 'Authorization': "Bearer " + this.apiKey,
@@ -471,6 +476,9 @@ ModelClient.prototype.request = function (messages, useFunctionCall) {
             },
             timeout: 120000 // 120 秒超时
         });
+
+        var httpElapsed = Date.now() - httpStartTime;
+        logger.debug("LLM HTTP请求耗时: " + httpElapsed + "ms" + (response.retries > 0 ? " (重试" + response.retries + "次)" : ""));
 
         if (!response.success) {
             throw new Error("API 请求失败: " + response.error);
@@ -496,15 +504,21 @@ ModelClient.prototype.request = function (messages, useFunctionCall) {
         // 解析响应（兼容文本模式）
         var parsed = this.parseResponse(content);
 
+        var totalElapsed = Date.now() - requestStartTime;
+        logger.debug("LLM请求总耗时: " + totalElapsed + "ms (HTTP: " + httpElapsed + "ms, 解析: " + (totalElapsed - httpElapsed) + "ms)");
+
         return {
             thinking: parsed.thinking,
             action: parsed.action,
             rawContent: content,
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            elapsed: totalElapsed,
+            httpElapsed: httpElapsed
         };
 
     } catch (e) {
-        logger.error("模型请求失败: " + e);
+        var elapsed = Date.now() - requestStartTime;
+        logger.error("模型请求失败: " + e + " (耗时: " + elapsed + "ms)");
         throw e;
     }
 };

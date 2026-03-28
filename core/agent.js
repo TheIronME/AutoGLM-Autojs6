@@ -73,7 +73,7 @@ PhoneAgent.prototype.captureScreenState = function() {
     if (this.screenMode === 'xml') {
         // XML解析模式
         uiDescription = xmlParser.getUiDescription();
-        logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 1000) + "..." : "获取失败"));
+        logger.debug("使用XML解析模式, UI元素信息: " + (uiDescription ? uiDescription.substring(0, 10000) + "..." : "获取失败"));
     } else {
         // 截图模式(默认)
         screenshot = screenCapture.captureScreen();
@@ -158,16 +158,21 @@ PhoneAgent.prototype.buildEnhancedToolResult = function(toolCallId, actionResult
  * @returns {Object} 处理结果 {success, finished, thinking, message, stepCount}
  */
 PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
+    var handleStartTime = Date.now();
     var finished = false;
     var thinking = response.thinking || "";
     var lastResult = null;
+
+    logger.debug("处理模型响应 - thinking长度: " + thinking.length + ", 有toolCalls: " + (response.toolCalls ? response.toolCalls.length : 0));
 
     if (this.useFunctionCall && response.toolCalls && response.toolCalls.length > 0) {
         // Function Call 模式
         logger.info("模型返回 " + response.toolCalls.length + " 个工具调用");
 
         // 解析工具调用
+        var parseStartTime = Date.now();
         var parsedCalls = this.modelClient.parseToolCall(response.toolCalls);
+        logger.debug("解析工具调用耗时: " + (Date.now() - parseStartTime) + "ms");
 
         // 构建助手消息（包含 tool_calls）
         this.context.push(this.buildToolCallsAssistantMessage(response.toolCalls));
@@ -178,18 +183,24 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
             logger.info("执行工具: " + toolCall.name + ", 参数: " + JSON.stringify(toolCall.arguments));
 
             // 转换为 action 对象
+            var convertStartTime = Date.now();
             var action = this.modelClient.convertToolCallToAction(toolCall);
+            logger.debug("工具转换耗时: " + (Date.now() - convertStartTime) + "ms");
+
             if (!action) {
                 logger.error("工具转换失败: " + toolCall.name);
                 continue;
             }
 
             // 执行动作
+            var execStartTime = Date.now();
             var actionResult = this.actionHandler.execute(
                 action,
                 screenData.screenWidth,
                 screenData.screenHeight
             );
+            var execElapsed = Date.now() - execStartTime;
+            logger.debug("动作执行耗时: " + execElapsed + "ms - " + (actionResult.actionName || toolCall.name));
 
             lastResult = actionResult;
 
@@ -200,12 +211,14 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
             }
 
             // 获取执行后的屏幕状态
+            var postScreenStartTime = Date.now();
             var postScreenData = this.captureScreenState();
+            logger.debug("后置屏幕捕获耗时: " + (Date.now() - postScreenStartTime) + "ms");
 
             // 构建包含屏幕状态的工具结果
             var toolResult = this.buildEnhancedToolResult(
-                toolCall.id, 
-                actionResult, 
+                toolCall.id,
+                actionResult,
                 postScreenData
             );
             this.context.push(this.buildToolResultMessage(toolCall.id, toolResult));
@@ -225,14 +238,19 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
         logger.info("模型响应: " + response.action);
 
         // 解析动作
+        var parseStartTime = Date.now();
         var action = ActionHandler.parseAction(response.action);
+        logger.debug("解析动作耗时: " + (Date.now() - parseStartTime) + "ms");
 
         // 执行动作
+        var execStartTime = Date.now();
         var actionResult = this.actionHandler.execute(
             action,
             screenData.screenWidth,
             screenData.screenHeight
         );
+        var execElapsed = Date.now() - execStartTime;
+        logger.debug("动作执行耗时: " + execElapsed + "ms");
 
         lastResult = actionResult;
 
@@ -247,20 +265,20 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
         if (!actionResult.shouldFinish) {
             sleep(this.restInterval);
             logger.debug("等待界面稳定: " + this.restInterval + "ms");
-            
+
             var postScreenData = this.captureScreenState();
             var screenInfo = MessageBuilder.buildScreenInfo(postScreenData.currentApp);
             var textContent = "** Screen Info **\n\n" + screenInfo;
-            
+
             if (this.screenMode === 'xml' && postScreenData.uiDescription) {
                 textContent += "\n\n** UI Elements (XML) **\n\n" + postScreenData.uiDescription;
             }
-            
-            var imageData = (this.screenMode === 'xml') ? null 
+
+            var imageData = (this.screenMode === 'xml') ? null
                 : (postScreenData.screenshot ? postScreenData.screenshot.base64Data : null);
-            
+
             this.context.push(MessageBuilder.createUserMessage(textContent, imageData));
-            
+
             // 更新屏幕数据
             screenData = postScreenData;
         }
@@ -273,6 +291,8 @@ PhoneAgent.prototype.handleModelResponse = function(response, screenData) {
     if (finished && this.verbose) {
         logger.info("✅ 任务完成: " + (lastResult ? lastResult.message : ""));
     }
+
+    logger.debug("处理模型响应总耗时: " + (Date.now() - handleStartTime) + "ms");
 
     return {
         success: lastResult ? lastResult.success : false,
@@ -316,36 +336,52 @@ PhoneAgent.prototype.run = function (task, onStep) {
 
         // 4. 主循环
         while (this.stepCount < this.maxSteps && this.isRunning) {
+            var stepStartTime = Date.now();
             this.stepCount++;
             logger.info("执行第 " + this.stepCount + " 步");
+            logger.debug("===== 步骤 " + this.stepCount + " 开始 =====");
 
             // 4.1 请求模型
             logger.info("💭 正在思考...");
+            var llmStartTime = Date.now();
             var response = this.modelClient.request(this.context, this.useFunctionCall);
+            var llmElapsed = Date.now() - llmStartTime;
+            logger.debug("LLM请求耗时: " + llmElapsed + "ms");
 
             // 4.2 移除最后一条消息中的图片以节省空间
+            var removeImageStartTime = Date.now();
             this.context[this.context.length - 1] = MessageBuilder.removeImagesFromMessage(
                 this.context[this.context.length - 1]
             );
+            logger.debug("移除图片耗时: " + (Date.now() - removeImageStartTime) + "ms");
 
             // 4.3 处理响应
+            var actionStartTime = Date.now();
             var result = this.handleModelResponse(response, screenData);
+            var actionElapsed = Date.now() - actionStartTime;
+            logger.debug("动作处理耗时: " + actionElapsed + "ms");
 
-            // 4.4 回调通知
+            // 4.4 记录步骤总耗时
+            var stepElapsed = Date.now() - stepStartTime;
+            logger.debug("===== 步骤 " + this.stepCount + " 完成, 总耗时: " + stepElapsed + "ms (LLM: " + llmElapsed + "ms, 动作: " + actionElapsed + "ms) =====");
+
+            // 4.5 回调通知
             if (onStep) {
                 onStep(result);
             }
 
-            // 4.5 检查是否完成
+            // 4.6 检查是否完成
             if (result.finished) {
                 taskResult.message = result.message || "任务完成";
                 taskResult.success = result.success;
                 taskResult.stepCount = this.stepCount;
-                
+
                 // 生成任务流程总结
                 if (this.shouldGenerateSummary(result)) {
+                    var summaryStartTime = Date.now();
                     taskResult.summary = this.generateSummary(task);
-                    
+                    logger.debug("生成总结耗时: " + (Date.now() - summaryStartTime) + "ms");
+
                     // 保存流程总结到存储
                     if (taskResult.summary) {
                         var savedFlow = storage.saveFlowSummary(task, taskResult.summary);
@@ -354,16 +390,20 @@ PhoneAgent.prototype.run = function (task, onStep) {
                         }
                     }
                 }
-                
+
                 return taskResult;
             }
 
-            // 4.6 更新屏幕状态用于下一轮
+            // 4.7 更新屏幕状态用于下一轮
+            var captureStartTime = Date.now();
             screenData = this.captureScreenState();
-            
-            // 4.7 构建下一轮的用户消息（包含最新屏幕状态）
+            logger.debug("屏幕捕获耗时: " + (Date.now() - captureStartTime) + "ms");
+
+            // 4.8 构建下一轮的用户消息（包含最新屏幕状态）
+            var buildMsgStartTime = Date.now();
             var nextMessage = this.buildUserMessage("", screenData, false);
             this.context.push(nextMessage);
+            logger.debug("构建消息耗时: " + (Date.now() - buildMsgStartTime) + "ms");
         }
 
         if (!this.isRunning) {
